@@ -19,7 +19,7 @@ import {
   symptomEntries
 } from "@shared/schema";
 import { randomUUID } from "crypto";
-import { drizzle } from "drizzle-orm/neon-serverless";
+import { drizzle } from "drizzle-orm/neon-http";
 import { neon } from "@neondatabase/serverless";
 import { eq, desc, and } from "drizzle-orm";
 
@@ -92,12 +92,11 @@ export class MemStorage implements IStorage {
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    // For Firebase users, ID must come from Firebase UID
     const user: User = { 
-      id: insertUser.id, // Firebase UID required
+      id: insertUser.id || randomUUID(),
       email: insertUser.email,
+      passwordHash: insertUser.passwordHash,
       displayName: insertUser.displayName ?? null,
-      photoURL: insertUser.photoURL ?? null,
       createdAt: new Date()
     };
     this.users.set(user.id, user);

@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import bcrypt from "bcryptjs";
 import { 
   insertUserSchema,
   insertHealthProfileSchema,
@@ -9,38 +10,22 @@ import {
   insertMentalWellnessEntrySchema,
   insertSymptomEntrySchema
 } from "@shared/schema";
-// Simple user-based auth middleware (for MVP - should be enhanced with proper Firebase token verification)
+// Token-based authentication middleware
 async function requireUser(req: any, res: any, next: any) {
   try {
-    // For now, we'll require userId in request and ensure user exists
-    const userId = req.params.userId || req.body.userId;
-    console.log('RequireUser middleware - userId:', userId);
-    console.log('RequireUser middleware - req.params:', req.params);
-    console.log('RequireUser middleware - req.body:', req.body);
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    console.log('RequireUser middleware - Token:', token ? 'Present' : 'Missing');
     
-    if (!userId) {
-      console.log('RequireUser middleware - No userId found');
-      return res.status(400).json({ error: "User ID required" });
+    if (!token) {
+      return res.status(401).json({ error: "Authorization token required" });
     }
 
-    let user = await storage.getUser(userId);
-    console.log('RequireUser middleware - Found user:', user);
+    // Using user ID as token for simplicity
+    const user = await storage.getUser(token);
+    console.log('RequireUser middleware - Found user:', user ? 'Yes' : 'No');
     
     if (!user) {
-      // Auto-create user if it doesn't exist (Firebase UID provided)
-      // In production, this should verify the Firebase token first
-      try {
-        console.log('RequireUser middleware - Creating new user for userId:', userId);
-        user = await storage.createUser({
-          id: userId, // Firebase UID
-          email: `user-${userId}@placeholder.com`, // Placeholder email
-          displayName: null
-        });
-        console.log('RequireUser middleware - Created user:', user);
-      } catch (createError) {
-        console.error('RequireUser middleware - Failed to create user:', createError);
-        return res.status(500).json({ error: "Failed to create user record" });
-      }
+      return res.status(401).json({ error: "Invalid or expired token" });
     }
 
     req.user = user;
@@ -52,6 +37,97 @@ async function requireUser(req: any, res: any, next: any) {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  
+  // Authentication routes
+  app.post("/api/auth/register", async (req, res) => {
+    try {
+      const { email, password, displayName } = req.body;
+      
+      if (!email || !password) {
+        return res.status(400).json({ error: "Email and password are required" });
+      }
+
+      // Check if user already exists
+      const existingUser = await storage.getUserByEmail(email);
+      if (existingUser) {
+        return res.status(400).json({ error: "User already exists with this email" });
+      }
+
+      // Hash password
+      const passwordHash = await bcrypt.hash(password, 10);
+
+      // Create user
+      const user = await storage.createUser({
+        email,
+        passwordHash,
+        displayName: displayName || null
+      });
+
+      // Return user without password hash
+      const { passwordHash: _, ...userWithoutPassword } = user;
+      res.status(201).json({ user: userWithoutPassword });
+    } catch (error: any) {
+      console.error("Registration error:", error);
+      res.status(500).json({ error: "Failed to register user" });
+    }
+  });
+
+  app.post("/api/auth/login", async (req, res) => {
+    try {
+      const { email, password } = req.body;
+      
+      if (!email || !password) {
+        return res.status(400).json({ error: "Email and password are required" });
+      }
+
+      // Find user by email
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        return res.status(401).json({ error: "Invalid email or password" });
+      }
+
+      // Verify password
+      const passwordMatch = await bcrypt.compare(password, user.passwordHash);
+      if (!passwordMatch) {
+        return res.status(401).json({ error: "Invalid email or password" });
+      }
+
+      // For simplicity, we'll use the user ID as the session token
+      // In production, use proper JWT tokens or session management
+      const { passwordHash: _, ...userWithoutPassword } = user;
+      res.json({ user: userWithoutPassword, token: user.id });
+    } catch (error: any) {
+      console.error("Login error:", error);
+      res.status(500).json({ error: "Failed to login" });
+    }
+  });
+
+  app.post("/api/auth/logout", async (req, res) => {
+    // For now, just return success (client will handle token removal)
+    res.json({ message: "Logged out successfully" });
+  });
+
+  app.get("/api/auth/me", async (req, res) => {
+    try {
+      const token = req.headers.authorization?.replace('Bearer ', '');
+      if (!token) {
+        return res.status(401).json({ error: "No token provided" });
+      }
+
+      // Using user ID as token for simplicity
+      const user = await storage.getUser(token);
+      if (!user) {
+        return res.status(401).json({ error: "Invalid token" });
+      }
+
+      const { passwordHash: _, ...userWithoutPassword } = user;
+      res.json({ user: userWithoutPassword });
+    } catch (error: any) {
+      console.error("Auth check error:", error);
+      res.status(500).json({ error: "Failed to verify authentication" });
+    }
+  });
+
   // User routes
   app.get("/api/users/:id", async (req, res) => {
     try {
@@ -145,7 +221,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/health-plans", requireUser, async (req, res) => {
     try {
       console.log('Health plan creation request:', req.body);
-      const validatedData = insertHealthPlanSchema.parse(req.body);
+      console.log('Authenticated user:', req.user?.id);
+      
+      // Add userId from authenticated user
+      const requestData = {
+        ...req.body,
+        userId: req.user.id
+      };
+      
+      const validatedData = insertHealthPlanSchema.parse(requestData);
       console.log('Validated data:', validatedData);
       const plan = await storage.createHealthPlan(validatedData);
       console.log('Created plan:', plan);

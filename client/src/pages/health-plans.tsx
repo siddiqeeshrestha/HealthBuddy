@@ -61,8 +61,8 @@ export default function HealthPlans() {
 
   // Fetch user's health plans
   const { data: healthPlans, isLoading } = useQuery({
-    queryKey: ['/api/health-plans', currentUser?.uid],
-    enabled: !!currentUser?.uid,
+    queryKey: ['/api/health-plans', currentUser?.id],
+    enabled: !!currentUser?.id,
   });
 
   // Create health plan mutation
@@ -70,13 +70,12 @@ export default function HealthPlans() {
     mutationFn: async (data: HealthPlanFormData) => {
       return apiRequest('POST', '/api/health-plans', {
         ...data,
-        userId: currentUser?.uid,
         targetValue: data.targetValue || null,
         targetUnit: data.targetUnit || null,
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/health-plans', currentUser?.uid] });
+      queryClient.invalidateQueries({ queryKey: ['/api/health-plans', currentUser?.id] });
       setIsDialogOpen(false);
       form.reset();
       toast({
@@ -99,7 +98,7 @@ export default function HealthPlans() {
       return apiRequest('DELETE', `/api/health-plans/${planId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/health-plans', currentUser?.uid] });
+      queryClient.invalidateQueries({ queryKey: ['/api/health-plans', currentUser?.id] });
       toast({
         title: 'Success!',
         description: 'Health plan deleted successfully.',

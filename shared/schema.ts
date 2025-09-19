@@ -3,12 +3,12 @@ import { pgTable, text, varchar, integer, decimal, timestamp, boolean, jsonb } f
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// Users table now stores Firebase user data
+// Users table for custom authentication
 export const users = pgTable("users", {
-  id: varchar("id").primaryKey(), // Firebase UID
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   email: text("email").notNull().unique(),
+  passwordHash: text("password_hash").notNull(),
   displayName: text("display_name"),
-  photoURL: text("photo_url"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
