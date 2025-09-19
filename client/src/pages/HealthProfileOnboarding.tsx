@@ -108,9 +108,6 @@ export default function HealthProfileOnboarding({ onComplete }: HealthProfileOnb
   };
 
   const onSubmit = (data: OnboardingHealthProfile) => {
-    console.log('Form submission triggered with data:', data);
-    console.log('Form errors:', form.formState.errors);
-    console.log('Form is valid:', form.formState.isValid);
     createProfileMutation.mutate(data);
   };
 
@@ -574,12 +571,6 @@ export default function HealthProfileOnboarding({ onComplete }: HealthProfileOnb
                       type="submit"
                       disabled={createProfileMutation.isPending}
                       data-testid="button-complete-setup"
-                      onClick={() => {
-                        console.log('Complete Setup button clicked');
-                        console.log('Current form data:', form.getValues());
-                        console.log('Form errors:', form.formState.errors);
-                        console.log('Form is valid:', form.formState.isValid);
-                      }}
                     >
                       {createProfileMutation.isPending ? (
                         <>

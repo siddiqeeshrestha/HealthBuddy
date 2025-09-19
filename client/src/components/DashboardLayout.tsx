@@ -12,10 +12,16 @@ import {
   User,
   Menu,
   X,
-  LucideIcon
+  LucideIcon,
+  Settings
 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { useQuery } from '@tanstack/react-query';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -177,6 +183,211 @@ function SidebarContent({ navigation, isActive }: {
           </Link>
         ))}
       </nav>
+      
+      {/* Profile Button at bottom */}
+      <div className="px-2 pb-4">
+        <Separator className="mb-4" />
+        <ProfileDialog />
+      </div>
     </>
+  );
+}
+
+function ProfileDialog() {
+  const [open, setOpen] = useState(false);
+  const { currentUser } = useAuth();
+
+  const { data: profile, isLoading } = useQuery({
+    queryKey: ['/api/health-profile', currentUser?.id],
+    enabled: open && !!currentUser?.id
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button
+          variant="ghost"
+          className="w-full justify-start text-muted-foreground hover:bg-muted hover:text-foreground"
+          data-testid="button-profile"
+        >
+          <Settings className="mr-3 h-6 w-6" />
+          Health Profile
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-2xl max-h-[80vh]">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <User className="h-5 w-5" />
+            Health Profile
+          </DialogTitle>
+          <DialogDescription>
+            View and manage your health profile information.
+          </DialogDescription>
+        </DialogHeader>
+        
+        <ScrollArea className="max-h-[60vh]">
+          {isLoading ? (
+            <div className="p-4 text-center">
+              <div className="animate-pulse space-y-4">
+                <div className="h-4 bg-muted rounded w-3/4"></div>
+                <div className="h-4 bg-muted rounded w-1/2"></div>
+                <div className="h-4 bg-muted rounded w-2/3"></div>
+              </div>
+            </div>
+          ) : profile ? (
+            <ProfileView profile={profile} onClose={() => setOpen(false)} />
+          ) : (
+            <div className="p-4 text-center text-muted-foreground">
+              <User className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p>No health profile found.</p>
+              <p className="text-sm mt-2">Complete your onboarding to create your health profile.</p>
+            </div>
+          )}
+        </ScrollArea>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ProfileView({ profile, onClose }: { profile: any; onClose: () => void }) {
+  const formatArray = (arr: string[] | null) => {
+    if (!arr || arr.length === 0) return 'None specified';
+    return arr.map(item => item.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())).join(', ');
+  };
+
+  const formatValue = (value: any) => {
+    if (value === null || value === undefined) return 'Not specified';
+    return value;
+  };
+
+  return (
+    <div className="space-y-6 p-4">
+      {/* Basic Information */}
+      <div>
+        <h3 className="text-lg font-semibold mb-3">Basic Information</h3>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="text-sm font-medium text-muted-foreground">Gender</label>
+            <p className="text-sm capitalize">{formatValue(profile.gender)}</p>
+          </div>
+          <div>
+            <label className="text-sm font-medium text-muted-foreground">Age</label>
+            <p className="text-sm">{formatValue(profile.age)} years</p>
+          </div>
+          <div>
+            <label className="text-sm font-medium text-muted-foreground">Height</label>
+            <p className="text-sm">{formatValue(profile.height)} cm</p>
+          </div>
+          <div>
+            <label className="text-sm font-medium text-muted-foreground">Weight</label>
+            <p className="text-sm">{formatValue(profile.weight)} kg</p>
+          </div>
+          {profile.goalWeight && (
+            <div>
+              <label className="text-sm font-medium text-muted-foreground">Goal Weight</label>
+              <p className="text-sm">{profile.goalWeight} kg</p>
+            </div>
+          )}
+          <div>
+            <label className="text-sm font-medium text-muted-foreground">Activity Level</label>
+            <p className="text-sm capitalize">{formatValue(profile.activityLevel)?.replace('_', ' ')}</p>
+          </div>
+        </div>
+      </div>
+
+      <Separator />
+
+      {/* Health Goals */}
+      <div>
+        <h3 className="text-lg font-semibold mb-3">Health Goals</h3>
+        <div className="flex flex-wrap gap-2">
+          {profile.healthGoals?.length > 0 ? (
+            profile.healthGoals.map((goal: string, index: number) => (
+              <Badge key={index} variant="secondary">
+                {goal.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
+              </Badge>
+            ))
+          ) : (
+            <p className="text-sm text-muted-foreground">No health goals specified</p>
+          )}
+        </div>
+      </div>
+
+      <Separator />
+
+      {/* Medical Information */}
+      <div>
+        <h3 className="text-lg font-semibold mb-3">Medical Information</h3>
+        <div className="space-y-4">
+          <div>
+            <label className="text-sm font-medium text-muted-foreground">Medical Conditions</label>
+            <p className="text-sm">{formatArray(profile.medicalConditions)}</p>
+          </div>
+          <div>
+            <label className="text-sm font-medium text-muted-foreground">Allergies</label>
+            <p className="text-sm">{formatArray(profile.allergies)}</p>
+          </div>
+          <div>
+            <label className="text-sm font-medium text-muted-foreground">Medications</label>
+            <p className="text-sm">{formatArray(profile.medications)}</p>
+          </div>
+        </div>
+      </div>
+
+      <Separator />
+
+      {/* Dietary Preferences */}
+      <div>
+        <h3 className="text-lg font-semibold mb-3">Dietary Preferences</h3>
+        <div className="flex flex-wrap gap-2">
+          {profile.dietaryPreferences?.length > 0 ? (
+            profile.dietaryPreferences.map((pref: string, index: number) => (
+              <Badge key={index} variant="outline">
+                {pref === 'none' ? 'No specific diet' : pref.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
+              </Badge>
+            ))
+          ) : (
+            <p className="text-sm text-muted-foreground">No dietary preferences specified</p>
+          )}
+        </div>
+      </div>
+
+      {/* Profile completion info */}
+      {profile.profileCompletedAt && (
+        <div className="bg-muted/50 rounded-lg p-3">
+          <p className="text-sm text-muted-foreground">
+            Profile completed on {new Date(profile.profileCompletedAt).toLocaleDateString()}
+          </p>
+          {profile.lastProfileUpdate && (
+            <p className="text-sm text-muted-foreground mt-1">
+              Last updated: {new Date(profile.lastProfileUpdate).toLocaleDateString()}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Action buttons */}
+      <div className="flex gap-3 pt-4">
+        <Button 
+          variant="outline" 
+          className="flex-1" 
+          onClick={onClose}
+          data-testid="button-close-profile"
+        >
+          Close
+        </Button>
+        <Button 
+          className="flex-1"
+          data-testid="button-edit-profile" 
+          onClick={() => {
+            onClose();
+            // Navigate to edit profile or open edit dialog
+            window.location.hash = '#edit-profile';
+          }}
+        >
+          Edit Profile
+        </Button>
+      </div>
+    </div>
   );
 }
