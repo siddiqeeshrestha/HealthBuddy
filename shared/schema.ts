@@ -100,11 +100,15 @@ export const insertHealthPlanSchema = createInsertSchema(healthPlans).omit({
 export const insertTrackingEntrySchema = createInsertSchema(trackingEntries).omit({
   id: true,
   createdAt: true,
+}).extend({
+  date: z.coerce.date(),
 });
 
 export const insertMentalWellnessEntrySchema = createInsertSchema(mentalWellnessEntries).omit({
   id: true,
   createdAt: true,
+}).extend({
+  date: z.coerce.date(),
 });
 
 export const insertSymptomEntrySchema = createInsertSchema(symptomEntries).omit({

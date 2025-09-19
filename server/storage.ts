@@ -10,9 +10,18 @@ import {
   type MentalWellnessEntry,
   type InsertMentalWellnessEntry,
   type SymptomEntry,
-  type InsertSymptomEntry
+  type InsertSymptomEntry,
+  users,
+  healthProfiles,
+  healthPlans,
+  trackingEntries,
+  mentalWellnessEntries,
+  symptomEntries
 } from "@shared/schema";
 import { randomUUID } from "crypto";
+import { drizzle } from "drizzle-orm/neon-serverless";
+import { neon } from "@neondatabase/serverless";
+import { eq, desc, and } from "drizzle-orm";
 
 export interface IStorage {
   // User methods
@@ -155,7 +164,7 @@ export class MemStorage implements IStorage {
       targetValue: insertPlan.targetValue ?? null,
       targetUnit: insertPlan.targetUnit ?? null,
       duration: insertPlan.duration ?? null,
-      isActive: insertPlan.isActive ?? null,
+      isActive: insertPlan.isActive ?? true,
       createdAt: new Date(),
       updatedAt: new Date()
     };
@@ -324,4 +333,194 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+// PostgreSQL Storage implementation using Drizzle ORM
+export class PostgresStorage implements IStorage {
+  private db;
+
+  constructor() {
+    if (!process.env.DATABASE_URL) {
+      throw new Error('DATABASE_URL environment variable is required');
+    }
+    console.log('PostgresStorage - Initializing with DATABASE_URL:', process.env.DATABASE_URL ? 'Present' : 'Missing');
+    const sql = neon(process.env.DATABASE_URL);
+    console.log('PostgresStorage - Neon SQL client created:', typeof sql);
+    this.db = drizzle(sql);
+    console.log('PostgresStorage - Drizzle client initialized');
+  }
+
+  // User methods
+  async getUser(id: string): Promise<User | undefined> {
+    try {
+      console.log('PostgresStorage.getUser - Looking up user with id:', id);
+      const result = await this.db.select().from(users).where(eq(users.id, id));
+      console.log('PostgresStorage.getUser - Query result:', result);
+      return result[0];
+    } catch (error) {
+      console.error('PostgresStorage.getUser - Error:', error);
+      throw error;
+    }
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const result = await this.db.select().from(users).where(eq(users.email, email));
+    return result[0];
+  }
+
+  async createUser(insertUser: InsertUser): Promise<User> {
+    const result = await this.db.insert(users).values(insertUser).returning();
+    return result[0];
+  }
+
+  // Health profile methods
+  async getHealthProfile(userId: string): Promise<HealthProfile | undefined> {
+    const result = await this.db.select().from(healthProfiles).where(eq(healthProfiles.userId, userId));
+    return result[0];
+  }
+
+  async createHealthProfile(insertProfile: InsertHealthProfile): Promise<HealthProfile> {
+    const result = await this.db.insert(healthProfiles).values(insertProfile).returning();
+    return result[0];
+  }
+
+  async updateHealthProfile(userId: string, updates: Partial<InsertHealthProfile>): Promise<HealthProfile | undefined> {
+    const result = await this.db.update(healthProfiles)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(healthProfiles.userId, userId))
+      .returning();
+    return result[0];
+  }
+
+  // Health plans methods
+  async getHealthPlans(userId: string): Promise<HealthPlan[]> {
+    return await this.db.select().from(healthPlans)
+      .where(eq(healthPlans.userId, userId))
+      .orderBy(desc(healthPlans.createdAt));
+  }
+
+  async getHealthPlan(id: string): Promise<HealthPlan | undefined> {
+    const result = await this.db.select().from(healthPlans).where(eq(healthPlans.id, id));
+    return result[0];
+  }
+
+  async createHealthPlan(insertPlan: InsertHealthPlan): Promise<HealthPlan> {
+    const result = await this.db.insert(healthPlans).values(insertPlan).returning();
+    return result[0];
+  }
+
+  async updateHealthPlan(id: string, updates: Partial<InsertHealthPlan>): Promise<HealthPlan | undefined> {
+    const result = await this.db.update(healthPlans)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(healthPlans.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async deleteHealthPlan(id: string): Promise<boolean> {
+    const result = await this.db.delete(healthPlans).where(eq(healthPlans.id, id));
+    return result.rowCount > 0;
+  }
+
+  // Tracking entries methods
+  async getTrackingEntries(userId: string, type?: string, limit = 50): Promise<TrackingEntry[]> {
+    let whereClause = eq(trackingEntries.userId, userId);
+    
+    if (type) {
+      whereClause = and(whereClause, eq(trackingEntries.type, type))!;
+    }
+    
+    return await this.db.select().from(trackingEntries)
+      .where(whereClause)
+      .orderBy(desc(trackingEntries.date))
+      .limit(limit);
+  }
+
+  async getTrackingEntry(id: string): Promise<TrackingEntry | undefined> {
+    const result = await this.db.select().from(trackingEntries).where(eq(trackingEntries.id, id));
+    return result[0];
+  }
+
+  async createTrackingEntry(insertEntry: InsertTrackingEntry): Promise<TrackingEntry> {
+    const result = await this.db.insert(trackingEntries).values(insertEntry).returning();
+    return result[0];
+  }
+
+  async updateTrackingEntry(id: string, updates: Partial<InsertTrackingEntry>): Promise<TrackingEntry | undefined> {
+    const result = await this.db.update(trackingEntries)
+      .set(updates)
+      .where(eq(trackingEntries.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async deleteTrackingEntry(id: string): Promise<boolean> {
+    const result = await this.db.delete(trackingEntries).where(eq(trackingEntries.id, id));
+    return result.rowCount > 0;
+  }
+
+  // Mental wellness methods
+  async getMentalWellnessEntries(userId: string, limit = 30): Promise<MentalWellnessEntry[]> {
+    return await this.db.select().from(mentalWellnessEntries)
+      .where(eq(mentalWellnessEntries.userId, userId))
+      .orderBy(desc(mentalWellnessEntries.date))
+      .limit(limit);
+  }
+
+  async getMentalWellnessEntry(id: string): Promise<MentalWellnessEntry | undefined> {
+    const result = await this.db.select().from(mentalWellnessEntries).where(eq(mentalWellnessEntries.id, id));
+    return result[0];
+  }
+
+  async createMentalWellnessEntry(insertEntry: InsertMentalWellnessEntry): Promise<MentalWellnessEntry> {
+    const result = await this.db.insert(mentalWellnessEntries).values(insertEntry).returning();
+    return result[0];
+  }
+
+  async updateMentalWellnessEntry(id: string, updates: Partial<InsertMentalWellnessEntry>): Promise<MentalWellnessEntry | undefined> {
+    const result = await this.db.update(mentalWellnessEntries)
+      .set(updates)
+      .where(eq(mentalWellnessEntries.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async deleteMentalWellnessEntry(id: string): Promise<boolean> {
+    const result = await this.db.delete(mentalWellnessEntries).where(eq(mentalWellnessEntries.id, id));
+    return result.rowCount > 0;
+  }
+
+  // Symptom entries methods
+  async getSymptomEntries(userId: string, limit = 20): Promise<SymptomEntry[]> {
+    return await this.db.select().from(symptomEntries)
+      .where(eq(symptomEntries.userId, userId))
+      .orderBy(desc(symptomEntries.createdAt))
+      .limit(limit);
+  }
+
+  async getSymptomEntry(id: string): Promise<SymptomEntry | undefined> {
+    const result = await this.db.select().from(symptomEntries).where(eq(symptomEntries.id, id));
+    return result[0];
+  }
+
+  async createSymptomEntry(insertEntry: InsertSymptomEntry): Promise<SymptomEntry> {
+    const result = await this.db.insert(symptomEntries).values(insertEntry).returning();
+    return result[0];
+  }
+
+  async updateSymptomEntry(id: string, updates: Partial<InsertSymptomEntry>): Promise<SymptomEntry | undefined> {
+    const result = await this.db.update(symptomEntries)
+      .set(updates)
+      .where(eq(symptomEntries.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async deleteSymptomEntry(id: string): Promise<boolean> {
+    const result = await this.db.delete(symptomEntries).where(eq(symptomEntries.id, id));
+    return result.rowCount > 0;
+  }
+}
+
+// Export the storage instance - use PostgreSQL in production, MemStorage for testing
+export const storage = process.env.NODE_ENV === 'development' 
+  ? new PostgresStorage() 
+  : new MemStorage();

@@ -1,5 +1,5 @@
 import { useAuth } from '@/contexts/AuthContext';
-import { useLocation } from 'wouter';
+import { useLocation, Link } from 'wouter';
 import { CheckCircle, Zap, Droplets, Moon, Heart, Search, Calendar, MessageCircle, LogOut, User } from 'lucide-react';
 
 const healthStats = [
@@ -88,41 +88,41 @@ export default function Dashboard() {
             </div>
             
             <nav className="hidden md:flex items-center space-x-8">
-              <a 
-                href="#" 
+              <Link 
+                href="/dashboard"
                 data-testid="nav-dashboard"
                 className="text-primary font-medium"
               >
                 Dashboard
-              </a>
-              <a 
+              </Link>
+              <Link 
                 href="#" 
                 data-testid="nav-tracking"
                 className="text-muted-foreground hover:text-foreground transition-colors"
               >
                 Tracking
-              </a>
-              <a 
-                href="#" 
+              </Link>
+              <Link 
+                href="/health-plans" 
                 data-testid="nav-plans"
                 className="text-muted-foreground hover:text-foreground transition-colors"
               >
                 Plans
-              </a>
-              <a 
+              </Link>
+              <Link 
                 href="#" 
                 data-testid="nav-wellness"
                 className="text-muted-foreground hover:text-foreground transition-colors"
               >
                 Wellness
-              </a>
-              <a 
+              </Link>
+              <Link 
                 href="#" 
                 data-testid="nav-reports"
                 className="text-muted-foreground hover:text-foreground transition-colors"
               >
                 Reports
-              </a>
+              </Link>
             </nav>
             
             <div className="flex items-center space-x-4">

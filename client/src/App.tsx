@@ -9,6 +9,7 @@ import Landing from "@/pages/landing";
 import Login from "@/pages/login";
 import Signup from "@/pages/signup";
 import Dashboard from "@/pages/dashboard";
+import HealthPlans from "@/pages/health-plans";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -20,6 +21,11 @@ function Router() {
       <Route path="/dashboard">
         <ProtectedRoute>
           <Dashboard />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/health-plans">
+        <ProtectedRoute>
+          <HealthPlans />
         </ProtectedRoute>
       </Route>
       <Route component={NotFound} />
