@@ -1,0 +1,51 @@
+In this final stage, we will integrate the AI functionalities to bring HealthBuddy to life, add role-based features, and finalize the application for deployment.
+
+1. AI Integration with LangChain.js:
+
+Personalized Plans:
+
+Replace the placeholder data in the "Personalized Plans" feature with real API calls to an AI model (e.g., OpenAI via OpenRouter).
+
+Use LangChain.js in your API routes to construct detailed prompts based on user input to generate tailored meal and exercise plans.
+
+AI Symptom Checker:
+
+Create a new page at app/dashboard/symptom-checker/page.tsx with an input for symptoms.
+
+Develop an API route that uses a Retrieval-Augmented Generation (RAG) pipeline with a medical knowledge base stored in a vector database (Supabase pgvector).
+
+The AI should provide a basic analysis, lifestyle advice, and a recommendation for professional consultation. Crucially, add a clear disclaimer that this is not a substitute for medical advice.
+
+AI Mental Wellness Companion:
+
+Enhance the app/api/chat/route.ts to use a RAG pipeline.
+
+Populate the vector database with mental wellness resources to enable the AI to provide empathetic and context-aware support.
+
+2. Health Reports (app/dashboard/reports/page.tsx):
+
+Create a page for users to view their weekly or monthly health reports.
+
+Fetch tracking data from the database and use a charting library like Recharts to visualize progress.
+
+Optionally, use an AI call to generate a text summary and recommendations based on the data.
+
+3. Role-Based Access and Professional Features:
+
+Update the Prisma schema to include user roles (END_USER, HEALTHCARE_PROFESSIONAL, ADMIN).
+
+Implement Next.js middleware to protect routes based on these roles.
+
+Create a dashboard for healthcare professionals (app/professional/dashboard/page.tsx) to view anonymized or user-shared health reports and AI-generated risk factor summaries.
+
+4. Admin Features and Deployment:
+
+Build a simple admin dashboard (app/admin/dashboard/page.tsx) to display platform usage statistics and manage users.
+
+Polish the entire application's UI with subtle animations using Framer Motion.
+
+Implement comprehensive error handling.
+
+Set up a GitHub Actions workflow for CI/CD.
+
+Create a Dockerfile to containerize the application, preparing it for deployment on platforms like Vercel and Azure."
