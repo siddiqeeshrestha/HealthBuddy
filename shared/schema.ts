@@ -16,17 +16,27 @@ export const users = pgTable("users", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-// Health profiles store user's basic health information
+// Health profiles store user's comprehensive health information
 export const healthProfiles = pgTable("health_profiles", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  // Basic demographics
+  gender: text("gender"), // male, female, other, prefer_not_to_say
   age: integer("age"),
   height: decimal("height"), // in cm
-  weight: decimal("weight"), // in kg
+  weight: decimal("weight"), // current weight in kg (keeping existing column name)
+  goalWeight: decimal("goal_weight"), // in kg
+  // Activity and fitness
   activityLevel: text("activity_level"), // sedentary, light, moderate, active, very_active
-  healthGoals: text("health_goals").array(),
+  healthGoals: text("health_goals").array(), // keeping existing column name: weight_loss, muscle_gain, general_fitness, endurance, strength
+  // Health information
   medicalConditions: text("medical_conditions").array(),
+  allergies: text("allergies").array(),
   medications: text("medications").array(),
+  dietaryPreferences: text("dietary_preferences").array(), // vegetarian, vegan, keto, paleo, gluten_free, dairy_free, etc.
+  // Profile completion tracking
+  profileCompletedAt: timestamp("profile_completed_at"),
+  lastProfileUpdate: timestamp("last_profile_update").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
@@ -93,9 +103,42 @@ export const insertUserSchema = createInsertSchema(users).omit({
   role: userRoleEnum.optional(),
 });
 
+// Comprehensive onboarding validation schema
+export const onboardingHealthProfileSchema = createInsertSchema(healthProfiles).omit({
+  id: true,
+  updatedAt: true,
+  lastProfileUpdate: true,
+  profileCompletedAt: true,
+}).extend({
+  gender: z.enum(['male', 'female', 'other', 'prefer_not_to_say']),
+  age: z.number().int().min(13, "Must be at least 13 years old").max(120, "Invalid age"),
+  height: z.coerce.number().min(100, "Height must be at least 100cm").max(250, "Invalid height"),
+  weight: z.coerce.number().min(20, "Weight must be at least 20kg").max(500, "Invalid weight"),
+  goalWeight: z.coerce.number().min(20, "Goal weight must be at least 20kg").max(500, "Invalid goal weight").optional(),
+  activityLevel: z.enum(['sedentary', 'light', 'moderate', 'active', 'very_active']),
+  healthGoals: z.array(z.enum(['weight_loss', 'muscle_gain', 'general_fitness', 'endurance', 'strength', 'flexibility', 'stress_relief'])).min(1, "Select at least one fitness goal"),
+  medicalConditions: z.array(z.string()).default([]),
+  allergies: z.array(z.string()).default([]),
+  medications: z.array(z.string()).default([]),
+  dietaryPreferences: z.array(z.enum(['none', 'vegetarian', 'vegan', 'keto', 'paleo', 'gluten_free', 'dairy_free', 'low_carb', 'mediterranean', 'intermittent_fasting'])).default([]),
+});
+
+// Profile update schema (allows partial updates)
 export const insertHealthProfileSchema = createInsertSchema(healthProfiles).omit({
   id: true,
   updatedAt: true,
+}).extend({
+  gender: z.enum(['male', 'female', 'other', 'prefer_not_to_say']).optional(),
+  age: z.number().int().min(13).max(120).optional(),
+  height: z.coerce.number().min(100).max(250).optional(),
+  weight: z.coerce.number().min(20).max(500).optional(),
+  goalWeight: z.coerce.number().min(20).max(500).optional(),
+  activityLevel: z.enum(['sedentary', 'light', 'moderate', 'active', 'very_active']).optional(),
+  healthGoals: z.array(z.enum(['weight_loss', 'muscle_gain', 'general_fitness', 'endurance', 'strength', 'flexibility', 'stress_relief'])).optional(),
+  medicalConditions: z.array(z.string()).optional(),
+  allergies: z.array(z.string()).optional(),
+  medications: z.array(z.string()).optional(),
+  dietaryPreferences: z.array(z.enum(['none', 'vegetarian', 'vegan', 'keto', 'paleo', 'gluten_free', 'dairy_free', 'low_carb', 'mediterranean', 'intermittent_fasting'])).optional(),
 });
 
 export const insertHealthPlanSchema = createInsertSchema(healthPlans).omit({
@@ -191,6 +234,7 @@ export type InsertUser = z.infer<typeof insertUserSchema>;
 
 export type HealthProfile = typeof healthProfiles.$inferSelect;
 export type InsertHealthProfile = z.infer<typeof insertHealthProfileSchema>;
+export type OnboardingHealthProfile = z.infer<typeof onboardingHealthProfileSchema>;
 
 export type HealthPlan = typeof healthPlans.$inferSelect;
 export type InsertHealthPlan = z.infer<typeof insertHealthPlanSchema>;
