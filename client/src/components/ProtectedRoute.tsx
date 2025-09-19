@@ -49,6 +49,12 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
     refetchStatus();
   };
 
+  // Handle onboarding skip
+  const handleOnboardingSkip = () => {
+    setShowOnboarding(false);
+    // Don't refetch status since user chose to skip
+  };
+
   if (!currentUser) {
     return null;
   }
@@ -67,7 +73,7 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
 
   // Show onboarding if user hasn't completed it
   if (showOnboarding) {
-    return <HealthProfileOnboarding onComplete={handleOnboardingComplete} />;
+    return <HealthProfileOnboarding onComplete={handleOnboardingComplete} onSkip={handleOnboardingSkip} />;
   }
 
   return <>{children}</>;

@@ -13,7 +13,8 @@ import {
   Menu,
   X,
   LucideIcon,
-  Settings
+  Settings,
+  AlertTriangle
 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -22,6 +23,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useQuery } from '@tanstack/react-query';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { queryClient } from '@/lib/queryClient';
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -260,8 +262,42 @@ function ProfileView({ profile, onClose }: { profile: any; onClose: () => void }
     return value;
   };
 
+  // Check if profile is complete
+  const isProfileComplete = profile && 
+    profile.profileCompletedAt != null &&
+    profile.gender != null &&
+    profile.age != null && Number.isFinite(Number(profile.age)) &&
+    profile.height != null && Number.isFinite(Number(profile.height)) &&
+    profile.weight != null && Number.isFinite(Number(profile.weight)) &&
+    profile.activityLevel != null &&
+    profile.healthGoals && profile.healthGoals.length > 0;
+
+  const missingFields = [];
+  if (!profile.gender) missingFields.push('Gender');
+  if (!profile.age) missingFields.push('Age');
+  if (!profile.height) missingFields.push('Height');
+  if (!profile.weight) missingFields.push('Weight');
+  if (!profile.activityLevel) missingFields.push('Activity Level');
+  if (!profile.healthGoals || profile.healthGoals.length === 0) missingFields.push('Health Goals');
+
   return (
     <div className="space-y-6 p-4">
+      {/* Profile Status */}
+      {!isProfileComplete && (
+        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
+          <div className="flex items-start space-x-3">
+            <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5" />
+            <div>
+              <h4 className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                Profile Incomplete
+              </h4>
+              <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
+                Missing: {missingFields.join(', ')}. Complete your profile to get personalized recommendations.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Basic Information */}
       <div>
         <h3 className="text-lg font-semibold mb-3">Basic Information</h3>
@@ -378,14 +414,21 @@ function ProfileView({ profile, onClose }: { profile: any; onClose: () => void }
         </Button>
         <Button 
           className="flex-1"
-          data-testid="button-edit-profile" 
+          data-testid={isProfileComplete ? "button-edit-profile" : "button-complete-profile"} 
           onClick={() => {
             onClose();
-            // Navigate to edit profile or open edit dialog
-            window.location.hash = '#edit-profile';
+            // For incomplete profiles, trigger onboarding. For complete profiles, show edit functionality.
+            if (!isProfileComplete) {
+              // Invalidate onboarding status cache to re-trigger onboarding check
+              queryClient.invalidateQueries({ queryKey: ['/api/health-profile/onboarding-status'] });
+              // This will cause ProtectedRoute to re-check onboarding status and show onboarding form
+            } else {
+              // For complete profiles, could implement edit functionality later
+              window.location.hash = '#edit-profile';
+            }
           }}
         >
-          Edit Profile
+          {isProfileComplete ? 'Edit Profile' : 'Complete Profile'}
         </Button>
       </div>
     </div>

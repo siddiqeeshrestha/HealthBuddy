@@ -19,7 +19,7 @@ import {
   type User
 } from "@shared/schema";
 import { analyzeSymptoms, generateHealthPlan, generateMentalWellnessResponse } from "./utils/openai";
-import { generateTokenPair, verifyToken, extractTokenFromHeader, type JWTPayload } from "./utils/jwt";
+import { generateTokenPair, generateAccessToken, verifyToken, extractTokenFromHeader, type JWTPayload } from "./utils/jwt";
 
 // Extend Express Request type to include user
 declare global {
@@ -368,8 +368,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const profile = await storage.getHealthProfile(req.user.id);
       
+      // Check if profile is truly complete - must have all required onboarding fields
+      const isProfileComplete = profile && 
+        profile.profileCompletedAt != null &&
+        profile.gender != null &&
+        profile.age != null && Number.isFinite(Number(profile.age)) &&
+        profile.height != null && Number.isFinite(Number(profile.height)) &&
+        profile.weight != null && Number.isFinite(Number(profile.weight)) &&
+        profile.activityLevel != null &&
+        profile.healthGoals && profile.healthGoals.length > 0;
+
       const onboardingStatus = {
-        hasCompletedOnboarding: profile && profile.profileCompletedAt !== null,
+        hasCompletedOnboarding: isProfileComplete,
         needsWeeklyUpdate: false,
         lastUpdateDays: 0,
         profile: profile

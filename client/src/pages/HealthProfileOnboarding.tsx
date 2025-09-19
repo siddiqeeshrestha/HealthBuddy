@@ -19,9 +19,10 @@ import { useAuth } from "@/contexts/AuthContext";
 
 interface HealthProfileOnboardingProps {
   onComplete: () => void;
+  onSkip?: () => void;
 }
 
-export default function HealthProfileOnboarding({ onComplete }: HealthProfileOnboardingProps) {
+export default function HealthProfileOnboarding({ onComplete, onSkip }: HealthProfileOnboardingProps) {
   const { currentUser } = useAuth();
   const { toast } = useToast();
   const [currentStep, setCurrentStep] = useState(1);
@@ -511,12 +512,33 @@ export default function HealthProfileOnboarding({ onComplete }: HealthProfileOnb
       <div className="max-w-4xl mx-auto">
         <Card className="shadow-xl">
           <CardHeader className="text-center pb-6">
-            <CardTitle className="text-3xl font-bold text-gray-900 dark:text-white">
-              Welcome to HealthBuddy! 🌟
-            </CardTitle>
-            <CardDescription className="text-lg">
-              Let's set up your personalized health profile to provide you with the best recommendations
-            </CardDescription>
+            <div className="flex justify-between items-start mb-4">
+              <div className="flex-1">
+                <CardTitle className="text-3xl font-bold text-gray-900 dark:text-white">
+                  Welcome to HealthBuddy! 🌟
+                </CardTitle>
+                <CardDescription className="text-lg">
+                  Let's set up your personalized health profile to provide you with the best recommendations
+                </CardDescription>
+              </div>
+              {onSkip && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    toast({
+                      title: "Onboarding skipped",
+                      description: "You can complete your health profile later from the sidebar.",
+                    });
+                    onSkip();
+                  }}
+                  data-testid="button-skip-onboarding"
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  Skip for Now
+                </Button>
+              )}
+            </div>
             
             {/* Progress indicator */}
             <div className="flex justify-center mt-6">
