@@ -10,6 +10,7 @@ import Landing from "@/pages/landing";
 import Login from "@/pages/login";
 import Signup from "@/pages/signup";
 import DashboardHome from "@/pages/dashboard/home";
+import DailyTracking from "@/pages/dashboard/tracking";
 import HealthPlans from "@/pages/health-plans";
 import NotFound from "@/pages/not-found";
 
@@ -25,12 +26,7 @@ function Router() {
             <Switch>
               <Route path="/" component={DashboardHome} />
               <Route path="/plans" component={HealthPlans} />
-              <Route path="/tracking">
-                <div className="p-8 text-center">
-                  <h2 className="text-2xl font-bold text-foreground mb-4">Daily Tracking</h2>
-                  <p className="text-muted-foreground">Coming soon...</p>
-                </div>
-              </Route>
+              <Route path="/tracking" component={DailyTracking} />
               <Route path="/wellness">
                 <div className="p-8 text-center">
                   <h2 className="text-2xl font-bold text-foreground mb-4">Mental Wellness</h2>

@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, decimal, timestamp, boolean, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, decimal, doublePrecision, timestamp, boolean, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -47,7 +47,7 @@ export const trackingEntries = pgTable("tracking_entries", {
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   date: timestamp("date").notNull(),
   type: text("type").notNull(), // exercise, nutrition, water, sleep, weight, mood
-  value: decimal("value"),
+  value: doublePrecision("value"),
   unit: text("unit"),
   notes: text("notes"),
   metadata: jsonb("metadata"), // for flexible data like exercise details

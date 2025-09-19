@@ -8,8 +8,23 @@ import {
   insertHealthPlanSchema,
   insertTrackingEntrySchema,
   insertMentalWellnessEntrySchema,
-  insertSymptomEntrySchema
+  insertSymptomEntrySchema,
+  insertCalorieLogSchema,
+  insertExerciseLogSchema,
+  insertWeightLogSchema,
+  insertWaterLogSchema,
+  insertSleepLogSchema,
+  type User
 } from "@shared/schema";
+
+// Extend Express Request type to include user
+declare global {
+  namespace Express {
+    interface Request {
+      user?: User;
+    }
+  }
+}
 // Token-based authentication middleware
 async function requireUser(req: any, res: any, next: any) {
   try {
@@ -193,6 +208,166 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Invalid health profile data", details: error.errors });
       }
       res.status(500).json({ error: "Failed to update health profile" });
+    }
+  });
+
+  // Tracking routes
+  app.get("/api/tracking/today", requireUser, async (req, res) => {
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      
+      const entries = await storage.getTrackingEntriesByDateRange(req.user.id, today, tomorrow);
+      res.json(entries);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get today's tracking entries" });
+    }
+  });
+
+  app.post("/api/tracking/calories", requireUser, async (req, res) => {
+    try {
+      const requestData = {
+        ...req.body,
+        userId: req.user.id,
+        date: req.body.date || new Date().toISOString().split('T')[0],
+        type: 'nutrition',
+        unit: 'calories',
+        metadata: {
+          foodItem: req.body.foodItem,
+          mealType: req.body.mealType,
+        }
+      };
+      
+      const validatedData = insertCalorieLogSchema.parse(requestData);
+      const entry = await storage.createTrackingEntry(validatedData);
+      res.status(201).json(entry);
+    } catch (error: any) {
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ error: "Invalid calorie data", details: error.errors });
+      }
+      res.status(500).json({ error: "Failed to create calorie entry" });
+    }
+  });
+
+  app.post("/api/tracking/exercise", requireUser, async (req, res) => {
+    try {
+      const requestData = {
+        ...req.body,
+        userId: req.user.id,
+        date: req.body.date || new Date().toISOString().split('T')[0],
+        type: 'exercise',
+        value: req.body.duration,
+        unit: req.body.unit || 'minutes',
+        metadata: {
+          exerciseType: req.body.exerciseType,
+          intensity: req.body.intensity,
+          caloriesBurned: req.body.caloriesBurned,
+        }
+      };
+      
+      const validatedData = insertExerciseLogSchema.parse(requestData);
+      const entry = await storage.createTrackingEntry(validatedData);
+      res.status(201).json(entry);
+    } catch (error: any) {
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ error: "Invalid exercise data", details: error.errors });
+      }
+      res.status(500).json({ error: "Failed to create exercise entry" });
+    }
+  });
+
+  app.post("/api/tracking/weight", requireUser, async (req, res) => {
+    try {
+      const requestData = {
+        ...req.body,
+        userId: req.user.id,
+        date: req.body.date || new Date().toISOString().split('T')[0],
+        type: 'weight',
+      };
+      
+      const validatedData = insertWeightLogSchema.parse(requestData);
+      const entry = await storage.createTrackingEntry(validatedData);
+      res.status(201).json(entry);
+    } catch (error: any) {
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ error: "Invalid weight data", details: error.errors });
+      }
+      res.status(500).json({ error: "Failed to create weight entry" });
+    }
+  });
+
+  app.post("/api/tracking/water", requireUser, async (req, res) => {
+    try {
+      const requestData = {
+        ...req.body,
+        userId: req.user.id,
+        date: req.body.date || new Date().toISOString().split('T')[0],
+        type: 'water',
+      };
+      
+      const validatedData = insertWaterLogSchema.parse(requestData);
+      const entry = await storage.createTrackingEntry(validatedData);
+      res.status(201).json(entry);
+    } catch (error: any) {
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ error: "Invalid water data", details: error.errors });
+      }
+      res.status(500).json({ error: "Failed to create water entry" });
+    }
+  });
+
+  app.post("/api/tracking/sleep", requireUser, async (req, res) => {
+    try {
+      const requestData = {
+        ...req.body,
+        userId: req.user.id,
+        date: req.body.date || new Date().toISOString().split('T')[0],
+        type: 'sleep',
+        unit: 'hours',
+        metadata: {
+          bedtime: req.body.bedtime,
+          wakeupTime: req.body.wakeupTime,
+          quality: req.body.quality,
+        }
+      };
+      
+      const validatedData = insertSleepLogSchema.parse(requestData);
+      const entry = await storage.createTrackingEntry(validatedData);
+      res.status(201).json(entry);
+    } catch (error: any) {
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ error: "Invalid sleep data", details: error.errors });
+      }
+      res.status(500).json({ error: "Failed to create sleep entry" });
+    }
+  });
+
+  app.get("/api/mental-wellness/recent", requireUser, async (req, res) => {
+    try {
+      const entries = await storage.getMentalWellnessEntries(req.user.id, 10);
+      res.json(entries);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get mental wellness entries" });
+    }
+  });
+
+  app.post("/api/mental-wellness", requireUser, async (req, res) => {
+    try {
+      const requestData = {
+        ...req.body,
+        userId: req.user.id,
+      };
+      
+      const validatedData = insertMentalWellnessEntrySchema.parse(requestData);
+      const entry = await storage.createMentalWellnessEntry(validatedData);
+      res.status(201).json(entry);
+    } catch (error: any) {
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ error: "Invalid mental wellness data", details: error.errors });
+      }
+      res.status(500).json({ error: "Failed to create mental wellness entry" });
     }
   });
 

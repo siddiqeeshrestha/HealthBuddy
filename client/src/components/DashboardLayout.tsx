@@ -157,9 +157,9 @@ function SidebarContent({ navigation, isActive }: {
       <nav className="mt-8 flex-1 px-2 space-y-1">
         {navigation.map((item) => (
           <Link key={item.name} href={item.href}>
-            <a
+            <div
               data-testid={`nav-${item.name.toLowerCase().replace(' ', '-')}`}
-              className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors ${
+              className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors cursor-pointer ${
                 isActive(item.href)
                   ? 'bg-primary text-primary-foreground'
                   : 'text-muted-foreground hover:bg-muted hover:text-foreground'
@@ -171,7 +171,7 @@ function SidebarContent({ navigation, isActive }: {
                 }`}
               />
               {item.name}
-            </a>
+            </div>
           </Link>
         ))}
       </nav>

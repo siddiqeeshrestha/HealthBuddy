@@ -21,7 +21,7 @@ import {
 import { randomUUID } from "crypto";
 import { drizzle } from "drizzle-orm/neon-http";
 import { neon } from "@neondatabase/serverless";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, gte, lt } from "drizzle-orm";
 
 export interface IStorage {
   // User methods
@@ -43,6 +43,7 @@ export interface IStorage {
   
   // Tracking entries methods
   getTrackingEntries(userId: string, type?: string, limit?: number): Promise<TrackingEntry[]>;
+  getTrackingEntriesByDateRange(userId: string, startDate: Date, endDate: Date): Promise<TrackingEntry[]>;
   getTrackingEntry(id: string): Promise<TrackingEntry | undefined>;
   createTrackingEntry(entry: InsertTrackingEntry): Promise<TrackingEntry>;
   updateTrackingEntry(id: string, entry: Partial<InsertTrackingEntry>): Promise<TrackingEntry | undefined>;
@@ -201,6 +202,16 @@ export class MemStorage implements IStorage {
     return entries
       .sort((a, b) => b.date.getTime() - a.date.getTime())
       .slice(0, limit);
+  }
+
+  async getTrackingEntriesByDateRange(userId: string, startDate: Date, endDate: Date): Promise<TrackingEntry[]> {
+    return Array.from(this.trackingEntries.values())
+      .filter((entry) => 
+        entry.userId === userId &&
+        entry.date >= startDate &&
+        entry.date < endDate
+      )
+      .sort((a, b) => b.date.getTime() - a.date.getTime());
   }
 
   async getTrackingEntry(id: string): Promise<TrackingEntry | undefined> {
@@ -431,6 +442,16 @@ export class PostgresStorage implements IStorage {
       .where(whereClause)
       .orderBy(desc(trackingEntries.date))
       .limit(limit);
+  }
+
+  async getTrackingEntriesByDateRange(userId: string, startDate: Date, endDate: Date): Promise<TrackingEntry[]> {
+    return await this.db.select().from(trackingEntries)
+      .where(and(
+        eq(trackingEntries.userId, userId),
+        gte(trackingEntries.date, startDate),
+        lt(trackingEntries.date, endDate)
+      )!)
+      .orderBy(desc(trackingEntries.date));
   }
 
   async getTrackingEntry(id: string): Promise<TrackingEntry | undefined> {

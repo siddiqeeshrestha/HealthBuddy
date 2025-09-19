@@ -73,13 +73,13 @@ export default function DashboardHome() {
 
   // Fetch user's recent tracking data
   const { data: todayStats, isLoading } = useQuery({
-    queryKey: ['/api/tracking/today', currentUser?.id],
+    queryKey: ['/api/tracking/today'],
     enabled: !!currentUser?.id,
   });
 
   // Fetch recent mental wellness entries
   const { data: recentWellness } = useQuery({
-    queryKey: ['/api/mental-wellness/recent', currentUser?.id],
+    queryKey: ['/api/mental-wellness/recent'],
     enabled: !!currentUser?.id,
   });
 
