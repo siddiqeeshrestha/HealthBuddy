@@ -200,7 +200,7 @@ function ProfileDialog() {
   const { currentUser } = useAuth();
 
   const { data: profile, isLoading } = useQuery({
-    queryKey: ['/api/health-profile', currentUser?.id],
+    queryKey: ['/api/health-profiles', currentUser?.id],
     enabled: open && !!currentUser?.id
   });
 
