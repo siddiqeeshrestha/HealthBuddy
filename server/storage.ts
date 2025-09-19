@@ -5,6 +5,8 @@ import {
   type InsertHealthProfile,
   type HealthPlan,
   type InsertHealthPlan,
+  type HealthPlanTarget,
+  type InsertHealthPlanTarget,
   type TrackingEntry,
   type InsertTrackingEntry,
   type MentalWellnessEntry,
@@ -20,6 +22,7 @@ import {
   users,
   healthProfiles,
   healthPlans,
+  healthPlanTargets,
   trackingEntries,
   mentalWellnessEntries,
   symptomEntries,
@@ -49,6 +52,14 @@ export interface IStorage {
   createHealthPlan(plan: InsertHealthPlan): Promise<HealthPlan>;
   updateHealthPlan(id: string, plan: Partial<InsertHealthPlan>): Promise<HealthPlan | undefined>;
   deleteHealthPlan(id: string): Promise<boolean>;
+  
+  // Health plan targets methods
+  getHealthPlanTargets(planId: string): Promise<HealthPlanTarget[]>;
+  getHealthPlanTarget(id: string): Promise<HealthPlanTarget | undefined>;
+  createHealthPlanTarget(target: InsertHealthPlanTarget): Promise<HealthPlanTarget>;
+  updateHealthPlanTarget(id: string, target: Partial<InsertHealthPlanTarget>): Promise<HealthPlanTarget | undefined>;
+  deleteHealthPlanTarget(id: string): Promise<boolean>;
+  updateTargetProgress(id: string, currentValue: number): Promise<HealthPlanTarget | undefined>;
   
   // Tracking entries methods
   getTrackingEntries(userId: string, type?: string, limit?: number): Promise<TrackingEntry[]>;
@@ -93,6 +104,7 @@ export class MemStorage implements IStorage {
   private users: Map<string, User>;
   private healthProfiles: Map<string, HealthProfile>;
   private healthPlans: Map<string, HealthPlan>;
+  private healthPlanTargets: Map<string, HealthPlanTarget>;
   private trackingEntries: Map<string, TrackingEntry>;
   private mentalWellnessEntries: Map<string, MentalWellnessEntry>;
   private symptomEntries: Map<string, SymptomEntry>;
@@ -104,6 +116,7 @@ export class MemStorage implements IStorage {
     this.users = new Map();
     this.healthProfiles = new Map();
     this.healthPlans = new Map();
+    this.healthPlanTargets = new Map();
     this.trackingEntries = new Map();
     this.mentalWellnessEntries = new Map();
     this.symptomEntries = new Map();
@@ -218,6 +231,72 @@ export class MemStorage implements IStorage {
 
   async deleteHealthPlan(id: string): Promise<boolean> {
     return this.healthPlans.delete(id);
+  }
+
+  // Health plan targets methods  
+  async getHealthPlanTargets(planId: string): Promise<HealthPlanTarget[]> {
+    return Array.from(this.healthPlanTargets.values())
+      .filter(target => target.planId === planId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+
+  async getHealthPlanTarget(id: string): Promise<HealthPlanTarget | undefined> {
+    return this.healthPlanTargets.get(id);
+  }
+
+  async createHealthPlanTarget(insertTarget: InsertHealthPlanTarget): Promise<HealthPlanTarget> {
+    const id = randomUUID();
+    const target: HealthPlanTarget = {
+      id,
+      planId: insertTarget.planId,
+      userId: insertTarget.userId,
+      title: insertTarget.title,
+      description: insertTarget.description ?? null,
+      targetType: insertTarget.targetType,
+      targetValue: insertTarget.targetValue,
+      targetUnit: insertTarget.targetUnit,
+      currentValue: insertTarget.currentValue ?? "0",
+      isCompleted: insertTarget.isCompleted ?? false,
+      dueDate: insertTarget.dueDate ?? null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.healthPlanTargets.set(id, target);
+    return target;
+  }
+
+  async updateHealthPlanTarget(id: string, updates: Partial<InsertHealthPlanTarget>): Promise<HealthPlanTarget | undefined> {
+    const existing = this.healthPlanTargets.get(id);
+    if (!existing) return undefined;
+    
+    const updated: HealthPlanTarget = {
+      ...existing,
+      ...updates,
+      updatedAt: new Date(),
+    };
+    this.healthPlanTargets.set(id, updated);
+    return updated;
+  }
+
+  async deleteHealthPlanTarget(id: string): Promise<boolean> {
+    return this.healthPlanTargets.delete(id);
+  }
+
+  async updateTargetProgress(id: string, currentValue: number): Promise<HealthPlanTarget | undefined> {
+    const target = await this.getHealthPlanTarget(id);
+    if (!target) return undefined;
+
+    const targetVal = typeof target.targetValue === 'string' ? parseFloat(target.targetValue) : target.targetValue;
+    const isCompleted = currentValue >= targetVal;
+    
+    const updated: HealthPlanTarget = {
+      ...target,
+      currentValue: currentValue.toString(),
+      isCompleted,
+      updatedAt: new Date(),
+    };
+    this.healthPlanTargets.set(id, updated);
+    return updated;
   }
 
   // Tracking entries methods
@@ -556,6 +635,54 @@ export class PostgresStorage implements IStorage {
   async deleteHealthPlan(id: string): Promise<boolean> {
     const result = await this.db.delete(healthPlans).where(eq(healthPlans.id, id));
     return result.rowCount > 0;
+  }
+
+  // Health plan targets methods
+  async getHealthPlanTargets(planId: string): Promise<HealthPlanTarget[]> {
+    return await this.db.select().from(healthPlanTargets)
+      .where(eq(healthPlanTargets.planId, planId))
+      .orderBy(desc(healthPlanTargets.createdAt));
+  }
+
+  async getHealthPlanTarget(id: string): Promise<HealthPlanTarget | undefined> {
+    const result = await this.db.select().from(healthPlanTargets).where(eq(healthPlanTargets.id, id));
+    return result[0];
+  }
+
+  async createHealthPlanTarget(insertTarget: InsertHealthPlanTarget): Promise<HealthPlanTarget> {
+    const result = await this.db.insert(healthPlanTargets).values(insertTarget).returning();
+    return result[0];
+  }
+
+  async updateHealthPlanTarget(id: string, updates: Partial<InsertHealthPlanTarget>): Promise<HealthPlanTarget | undefined> {
+    const result = await this.db.update(healthPlanTargets)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(healthPlanTargets.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async deleteHealthPlanTarget(id: string): Promise<boolean> {
+    const result = await this.db.delete(healthPlanTargets).where(eq(healthPlanTargets.id, id));
+    return result.rowCount > 0;
+  }
+
+  async updateTargetProgress(id: string, currentValue: number): Promise<HealthPlanTarget | undefined> {
+    const target = await this.getHealthPlanTarget(id);
+    if (!target) return undefined;
+
+    const targetVal = typeof target.targetValue === 'string' ? parseFloat(target.targetValue) : target.targetValue;
+    const isCompleted = currentValue >= targetVal;
+    
+    const result = await this.db.update(healthPlanTargets)
+      .set({ 
+        currentValue: currentValue.toString(), 
+        isCompleted,
+        updatedAt: new Date()
+      })
+      .where(eq(healthPlanTargets.id, id))
+      .returning();
+    return result[0];
   }
 
   // Tracking entries methods

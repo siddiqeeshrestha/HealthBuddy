@@ -21,7 +21,7 @@ import {
   doctorSearchRequestSchema,
   type User
 } from "@shared/schema";
-import { analyzeSymptoms, generateHealthPlan, generateMentalWellnessResponse, findNearbyDoctors, analyzeFood, generateMealSuggestions } from "./utils/openai";
+import { analyzeSymptoms, generateHealthPlan, generateMentalWellnessResponse, findNearbyDoctors, analyzeFood, generateMealSuggestions, generateGroceryList } from "./utils/openai";
 import { generateTokenPair, generateAccessToken, verifyToken, extractTokenFromHeader, type JWTPayload } from "./utils/jwt";
 
 // Extend Express Request type to include user
@@ -738,6 +738,90 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Health plan targets routes
+  app.get("/api/health-plan-targets/:planId", requireUser, async (req, res) => {
+    try {
+      const targets = await storage.getHealthPlanTargets(req.params.planId);
+      res.json(targets);
+    } catch (error) {
+      console.error("Error fetching health plan targets:", error);
+      res.status(500).json({ error: "Failed to fetch health plan targets" });
+    }
+  });
+
+  app.get("/api/health-plan-targets/single/:id", requireUser, async (req, res) => {
+    try {
+      const target = await storage.getHealthPlanTarget(req.params.id);
+      if (!target) {
+        return res.status(404).json({ error: "Health plan target not found" });
+      }
+      res.json(target);
+    } catch (error) {
+      console.error("Error fetching health plan target:", error);
+      res.status(500).json({ error: "Failed to fetch health plan target" });
+    }
+  });
+
+  app.post("/api/health-plan-targets", requireUser, async (req, res) => {
+    try {
+      // Add input validation schema if needed
+      const targetData = {
+        ...req.body,
+        userId: req.user!.id, // Ensure the target belongs to the authenticated user
+      };
+      
+      const target = await storage.createHealthPlanTarget(targetData);
+      res.status(201).json(target);
+    } catch (error) {
+      console.error("Error creating health plan target:", error);
+      res.status(500).json({ error: "Failed to create health plan target" });
+    }
+  });
+
+  app.put("/api/health-plan-targets/:id", requireUser, async (req, res) => {
+    try {
+      const target = await storage.updateHealthPlanTarget(req.params.id, req.body);
+      if (!target) {
+        return res.status(404).json({ error: "Health plan target not found" });
+      }
+      res.json(target);
+    } catch (error) {
+      console.error("Error updating health plan target:", error);
+      res.status(500).json({ error: "Failed to update health plan target" });
+    }
+  });
+
+  app.put("/api/health-plan-targets/:id/progress", requireUser, async (req, res) => {
+    try {
+      const { currentValue } = req.body;
+      if (typeof currentValue !== 'number') {
+        return res.status(400).json({ error: "currentValue must be a number" });
+      }
+      
+      const target = await storage.updateTargetProgress(req.params.id, currentValue);
+      if (!target) {
+        return res.status(404).json({ error: "Health plan target not found" });
+      }
+      res.json(target);
+    } catch (error) {
+      console.error("Error updating target progress:", error);
+      res.status(500).json({ error: "Failed to update target progress" });
+    }
+  });
+
+  app.delete("/api/health-plan-targets/:id", requireUser, async (req, res) => {
+    try {
+      const deleted = await storage.deleteHealthPlanTarget(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Health plan target not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting health plan target:", error);
+      res.status(500).json({ error: "Failed to delete health plan target" });
+    }
+  });
+
   // Tracking entries routes
   app.get("/api/tracking/:userId", requireUser, async (req, res) => {
     try {
@@ -1197,9 +1281,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Grocery Lists endpoints
   app.get("/api/grocery-lists/:userId", requireUser, async (req, res) => {
     try {
-      // For now, return empty array since we haven't implemented storage yet
-      res.json([]);
+      if (!req.user) {
+        return res.status(401).json({ error: "User not authenticated" });
+      }
+
+      // Get user's existing grocery lists from storage
+      const groceryLists = await storage.getGroceryLists(req.user.id);
+      res.json(groceryLists);
     } catch (error) {
+      console.error('Error fetching grocery lists:', error);
       res.status(500).json({ error: "Failed to get grocery lists" });
     }
   });
@@ -1216,20 +1306,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Name and items are required" });
       }
 
-      // For now, return a mock response since we haven't implemented storage yet
-      const mockGroceryList = {
-        id: 'mock-id',
-        name,
-        items,
+      // Create grocery list in storage
+      const groceryList = await storage.createGroceryList({
         userId: req.user.id,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
+        name,
+        items: JSON.stringify(items)
+      });
 
-      res.json(mockGroceryList);
+      res.json(groceryList);
     } catch (error: any) {
+      console.error('Error creating grocery list:', error);
       res.status(500).json({ 
         error: "Failed to create grocery list", 
+        details: error.message 
+      });
+    }
+  });
+
+  // Generate AI-powered grocery list suggestions
+  app.post("/api/ai/generate-grocery-list", requireUser, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: "User not authenticated" });
+      }
+
+      const { mealPlans } = req.body;
+
+      // Get user's health profile for personalized suggestions
+      const healthProfile = await storage.getHealthProfile(req.user.id);
+
+      // Generate grocery list suggestions using AI
+      const groceryListSuggestion = await generateGroceryList(healthProfile, mealPlans);
+
+      res.json(groceryListSuggestion);
+    } catch (error: any) {
+      console.error('Grocery list generation error:', error);
+      res.status(500).json({ 
+        error: "Failed to generate grocery list", 
         details: error.message 
       });
     }

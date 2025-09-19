@@ -55,6 +55,23 @@ export const healthPlans = pgTable("health_plans", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// Health plan targets for tracking progress towards goals
+export const healthPlanTargets = pgTable("health_plan_targets", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  planId: varchar("plan_id").notNull().references(() => healthPlans.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  description: text("description"),
+  targetType: text("target_type").notNull(), // weekly, daily, total
+  targetValue: decimal("target_value").notNull(),
+  targetUnit: text("target_unit").notNull(),
+  currentValue: decimal("current_value").default("0"),
+  isCompleted: boolean("is_completed").default(false),
+  dueDate: timestamp("due_date"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 // Daily tracking entries
 export const trackingEntries = pgTable("tracking_entries", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -176,6 +193,12 @@ export const insertHealthProfileSchema = createInsertSchema(healthProfiles).omit
 });
 
 export const insertHealthPlanSchema = createInsertSchema(healthPlans).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertHealthPlanTargetSchema = createInsertSchema(healthPlanTargets).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
@@ -308,6 +331,9 @@ export type OnboardingHealthProfile = z.infer<typeof onboardingHealthProfileSche
 export type HealthPlan = typeof healthPlans.$inferSelect;
 export type InsertHealthPlan = z.infer<typeof insertHealthPlanSchema>;
 
+export type HealthPlanTarget = typeof healthPlanTargets.$inferSelect;
+export type InsertHealthPlanTarget = z.infer<typeof insertHealthPlanTargetSchema>;
+
 export type TrackingEntry = typeof trackingEntries.$inferSelect;
 export type InsertTrackingEntry = z.infer<typeof insertTrackingEntrySchema>;
 
@@ -325,6 +351,64 @@ export type InsertGroceryList = z.infer<typeof insertGroceryListSchema>;
 
 export type FoodDetection = typeof foodDetections.$inferSelect;
 export type InsertFoodDetection = z.infer<typeof insertFoodDetectionSchema>;
+
+// AI-generated meal suggestion type
+export interface MealSuggestion {
+  name: string;
+  description: string;
+  calories: number;
+  prepTime: number;
+  difficulty: 'Easy' | 'Medium' | 'Hard';
+  ingredients: string[];
+  instructions: string[];
+  healthBenefits: string[];
+  suitableFor: string[];
+}
+
+// AI-generated grocery list suggestion type
+export interface GroceryListSuggestion {
+  weeklyBudget: number;
+  totalItems: number;
+  categories: {
+    name: string;
+    items: {
+      name: string;
+      quantity: string;
+      estimatedCost: number;
+      healthBenefits: string[];
+      priority: 'high' | 'medium' | 'low';
+    }[];
+  }[];
+  healthScore: number;
+  budgetTips: string[];
+  nutritionalBalance: {
+    proteins: number;
+    vegetables: number;
+    fruits: number;
+    grains: number;
+    dairy: number;
+  };
+  mealPrepTips: string[];
+}
+
+// Food detection result from AI
+export interface FoodDetectionResult {
+  detectedFoods: {
+    name: string;
+    confidence: number;
+    calories: number;
+    nutrients: {
+      protein: number;
+      carbs: number;
+      fat: number;
+      fiber: number;
+      vitamins: string[];
+    };
+  }[];
+  totalCalories: number;
+  healthScore: number;
+  recommendations: string[];
+}
 
 // Specific tracking type definitions
 export type InsertCalorieLog = z.infer<typeof insertCalorieLogSchema>;

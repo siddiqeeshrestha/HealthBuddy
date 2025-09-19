@@ -265,6 +265,38 @@ export default function DailyTracking() {
     );
   }
 
+  // Process today's entries for quick stats
+  const processQuickStats = (entries: any[]) => {
+    const stats = {
+      calories: 0,
+      exercise: 0,
+      water: 0,
+      sleep: 0,
+    };
+
+    if (entries) {
+      // Calculate calories
+      const calorieEntries = entries.filter(entry => entry.type === 'nutrition');
+      stats.calories = calorieEntries.reduce((sum, entry) => sum + (entry.value || 0), 0);
+
+      // Calculate exercise duration
+      const exerciseEntries = entries.filter(entry => entry.type === 'exercise');
+      stats.exercise = exerciseEntries.reduce((sum, entry) => sum + (entry.value || 0), 0);
+
+      // Calculate water intake
+      const waterEntries = entries.filter(entry => entry.type === 'water');
+      stats.water = waterEntries.reduce((sum, entry) => sum + (entry.value || 0), 0);
+
+      // Get latest sleep entry
+      const sleepEntries = entries.filter(entry => entry.type === 'sleep');
+      stats.sleep = sleepEntries.length > 0 ? sleepEntries[sleepEntries.length - 1].value || 0 : 0;
+    }
+
+    return stats;
+  };
+
+  const quickStats = processQuickStats(Array.isArray(todayEntries) ? todayEntries : []);
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Page Header */}
@@ -284,7 +316,7 @@ export default function DailyTracking() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Calories</p>
-                <p className="text-xl font-bold">1,847</p>
+                <p className="text-xl font-bold">{quickStats.calories > 0 ? quickStats.calories.toLocaleString() : '0'}</p>
               </div>
               <Apple className="w-8 h-8 text-orange-500" />
             </div>
@@ -295,7 +327,7 @@ export default function DailyTracking() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Exercise</p>
-                <p className="text-xl font-bold">45 min</p>
+                <p className="text-xl font-bold">{quickStats.exercise > 0 ? `${quickStats.exercise} min` : '0 min'}</p>
               </div>
               <Activity className="w-8 h-8 text-green-500" />
             </div>
@@ -306,7 +338,7 @@ export default function DailyTracking() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Water</p>
-                <p className="text-xl font-bold">1.5L</p>
+                <p className="text-xl font-bold">{quickStats.water > 0 ? `${(quickStats.water / 1000).toFixed(1)}L` : '0L'}</p>
               </div>
               <Droplets className="w-8 h-8 text-blue-500" />
             </div>
@@ -317,7 +349,7 @@ export default function DailyTracking() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Sleep</p>
-                <p className="text-xl font-bold">7.5h</p>
+                <p className="text-xl font-bold">{quickStats.sleep > 0 ? `${quickStats.sleep}h` : 'Not tracked'}</p>
               </div>
               <Moon className="w-8 h-8 text-purple-500" />
             </div>

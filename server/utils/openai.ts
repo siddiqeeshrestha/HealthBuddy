@@ -1,4 +1,10 @@
 import OpenAI from "openai";
+import type { 
+  HealthPlan, 
+  GroceryListSuggestion,
+  MealSuggestion,
+  FoodDetectionResult
+} from '@shared/schema';
 
 /*
 Follow these instructions when using this blueprint:
@@ -49,38 +55,6 @@ export interface HealthReportSummary {
   recommendations: string[];
   achievements: string[];
   areasForImprovement: string[];
-}
-
-// Food detection result interface
-export interface FoodDetectionResult {
-  detectedFoods: {
-    name: string;
-    confidence: number;
-    calories: number;
-    nutrients: {
-      protein: number;
-      carbs: number;
-      fat: number;
-      fiber: number;
-      vitamins: string[];
-    };
-  }[];
-  totalCalories: number;
-  healthScore: number;
-  recommendations: string[];
-}
-
-// Meal suggestion interface
-export interface MealSuggestion {
-  name: string;
-  description: string;
-  calories: number;
-  prepTime: number;
-  difficulty: 'Easy' | 'Medium' | 'Hard';
-  ingredients: string[];
-  instructions: string[];
-  healthBenefits: string[];
-  suitableFor: string[];
 }
 
 /**
@@ -591,8 +565,13 @@ Be precise and accurate with food identification. If it's a carrot, say carrot. 
 
     console.log('Raw AI response:', content);
 
-    // Clean the response in case it has markdown formatting
-    const cleanedContent = content.replace(/```json\n?|\n?```/g, '').trim();
+    // Clean the response by removing markdown code blocks if present
+    let cleanedContent = content.trim();
+    if (cleanedContent.startsWith('```json')) {
+      cleanedContent = cleanedContent.replace(/^```json\s*/, '').replace(/```\s*$/, '');
+    } else if (cleanedContent.startsWith('```')) {
+      cleanedContent = cleanedContent.replace(/^```\s*/, '').replace(/```\s*$/, '');
+    }
     
     let result;
     try {
@@ -727,7 +706,15 @@ Guidelines:
       throw new Error('No response from AI');
     }
 
-    const suggestions = JSON.parse(content);
+    // Clean the response by removing markdown code blocks if present
+    let cleanedContent = content.trim();
+    if (cleanedContent.startsWith('```json')) {
+      cleanedContent = cleanedContent.replace(/^```json\s*/, '').replace(/```\s*$/, '');
+    } else if (cleanedContent.startsWith('```')) {
+      cleanedContent = cleanedContent.replace(/^```\s*/, '').replace(/```\s*$/, '');
+    }
+
+    const suggestions = JSON.parse(cleanedContent);
     
     if (!Array.isArray(suggestions)) {
       throw new Error('Invalid response format from AI');
@@ -737,5 +724,191 @@ Guidelines:
   } catch (error) {
     console.error('Error generating meal suggestions:', error);
     throw new Error('Failed to generate meal suggestions: ' + (error as Error).message);
+  }
+}
+
+/**
+ * Generate personalized grocery list based on user profile and health goals
+ */
+export async function generateGroceryList(
+  userProfile?: any,
+  mealPlans?: string[]
+): Promise<GroceryListSuggestion> {
+  try {
+    const healthContext = userProfile ? `
+User Profile Context:
+- Age: ${userProfile.age}
+- Health Goals: ${userProfile.healthGoals?.join(', ') || 'General wellness'}
+- Activity Level: ${userProfile.activityLevel || 'moderate'}
+- Medical Conditions: ${userProfile.medicalConditions?.join(', ') || 'None'}
+- Dietary Restrictions: ${userProfile.dietaryRestrictions?.join(', ') || 'None'}
+- Allergies: ${userProfile.allergies?.join(', ') || 'None'}
+- Budget Preference: ${userProfile.budgetPreference || 'moderate'}
+` : '';
+
+    const mealContext = mealPlans && mealPlans.length > 0 ? `
+Planned Meals: ${mealPlans.join(', ')}
+` : '';
+
+    const prompt = `Generate a comprehensive, personalized grocery shopping list based on the user's health profile and dietary needs.
+${healthContext}
+${mealContext}
+
+Create a well-organized grocery list that supports the user's health goals and accommodates their restrictions.
+
+Return a JSON object with this exact structure:
+{
+  "weeklyBudget": 120,
+  "totalItems": 25,
+  "categories": [
+    {
+      "name": "Fresh Produce",
+      "items": [
+        {
+          "name": "Spinach",
+          "quantity": "2 bunches",
+          "estimatedCost": 4.50,
+          "healthBenefits": ["High in iron", "Rich in folate"],
+          "priority": "high"
+        }
+      ]
+    }
+  ],
+  "healthScore": 8.5,
+  "budgetTips": ["Buy seasonal vegetables", "Consider frozen alternatives"],
+  "nutritionalBalance": {
+    "proteins": 30,
+    "vegetables": 40,
+    "fruits": 15,
+    "grains": 10,
+    "dairy": 5
+  },
+  "mealPrepTips": ["Wash and prep vegetables on Sunday", "Portion proteins for easy cooking"]
+}
+
+Guidelines:
+- Prioritize whole foods and minimally processed items
+- Include variety across all food groups
+- Consider seasonal availability and cost
+- Suggest specific quantities based on a week's worth of meals
+- Mark priority levels: high, medium, low
+- Include estimated costs (reasonable estimates)
+- Provide health benefits for key items
+- Balance macronutrients according to health goals
+- Include practical shopping and meal prep tips`;
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "system",
+          content: "You are a professional nutritionist and budget-conscious grocery advisor. Create practical, health-focused shopping lists that align with users' dietary needs and goals."
+        },
+        {
+          role: "user",
+          content: prompt
+        }
+      ],
+      max_tokens: 2500,
+      temperature: 0.3,
+    });
+
+    const content = response.choices[0]?.message?.content;
+    if (!content) {
+      throw new Error('No response from AI');
+    }
+
+    console.log('Raw grocery list response:', content);
+
+    // Clean the response by removing markdown code blocks if present
+    let cleanedContent = content.trim();
+    if (cleanedContent.startsWith('```json')) {
+      cleanedContent = cleanedContent.replace(/^```json\s*/, '').replace(/```\s*$/, '');
+    } else if (cleanedContent.startsWith('```')) {
+      cleanedContent = cleanedContent.replace(/^```\s*/, '').replace(/```\s*$/, '');
+    }
+    
+    let result;
+    try {
+      result = JSON.parse(cleanedContent);
+    } catch (parseError) {
+      console.error('JSON parse error:', parseError);
+      console.log('Cleaned content:', cleanedContent);
+      throw new Error('Invalid JSON response from AI');
+    }
+
+    // Validate and ensure required structure
+    if (!result.categories || !Array.isArray(result.categories)) {
+      throw new Error('Invalid grocery list format from AI');
+    }
+
+    // Ensure all required fields are present with defaults
+    result.weeklyBudget = result.weeklyBudget || 100;
+    result.totalItems = result.totalItems || result.categories.reduce((total: number, cat: any) => total + (cat.items?.length || 0), 0);
+    result.healthScore = result.healthScore || 7;
+    result.budgetTips = result.budgetTips || ['Compare prices between stores', 'Buy in bulk for non-perishables'];
+    result.nutritionalBalance = result.nutritionalBalance || {
+      proteins: 25,
+      vegetables: 35,
+      fruits: 20,
+      grains: 15,
+      dairy: 5
+    };
+    result.mealPrepTips = result.mealPrepTips || ['Plan meals in advance', 'Prep ingredients on weekends'];
+
+    // Ensure each category has proper structure
+    result.categories = result.categories.map((category: any) => ({
+      name: category.name || 'Miscellaneous',
+      items: (category.items || []).map((item: any) => ({
+        name: item.name || 'Unknown Item',
+        quantity: item.quantity || '1 unit',
+        estimatedCost: item.estimatedCost || 2.00,
+        healthBenefits: item.healthBenefits || ['Nutritious choice'],
+        priority: item.priority || 'medium'
+      }))
+    }));
+
+    console.log('Processed grocery list:', JSON.stringify(result, null, 2));
+    return result;
+
+  } catch (error) {
+    console.error('Error generating grocery list:', error);
+    
+    // Return a fallback grocery list
+    return {
+      weeklyBudget: 100,
+      totalItems: 10,
+      categories: [
+        {
+          name: "Essential Items",
+          items: [
+            {
+              name: "Mixed Vegetables",
+              quantity: "2 lbs",
+              estimatedCost: 6.00,
+              healthBenefits: ["Vitamins and minerals", "Fiber"],
+              priority: "high"
+            },
+            {
+              name: "Lean Protein",
+              quantity: "1 lb",
+              estimatedCost: 8.00,
+              healthBenefits: ["Essential amino acids", "Muscle building"],
+              priority: "high"
+            }
+          ]
+        }
+      ],
+      healthScore: 6,
+      budgetTips: ["Unable to generate personalized tips. Please try again."],
+      nutritionalBalance: {
+        proteins: 30,
+        vegetables: 30,
+        fruits: 20,
+        grains: 15,
+        dairy: 5
+      },
+      mealPrepTips: ["Plan your meals ahead", "Shop with a list"]
+    };
   }
 }

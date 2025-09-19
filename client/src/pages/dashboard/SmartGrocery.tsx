@@ -2,11 +2,12 @@ import { useState, useRef } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
+import { Progress } from "@/components/ui/progress";
 import { 
   Camera, 
   Upload, 
@@ -19,7 +20,11 @@ import {
   AlertCircle,
   CheckCircle,
   X,
-  Plus
+  Plus,
+  Star,
+  Clock,
+  Target,
+  TrendingUp
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiRequest } from "@/lib/queryClient";
@@ -55,16 +60,29 @@ interface MealSuggestion {
   suitableFor: string[];
 }
 
-interface GroceryList {
-  id: string;
-  name: string;
-  items: {
+interface GroceryListSuggestion {
+  weeklyBudget: number;
+  totalItems: number;
+  categories: {
     name: string;
-    quantity: string;
-    category: string;
-    purchased: boolean;
+    items: {
+      name: string;
+      quantity: string;
+      estimatedCost: number;
+      healthBenefits: string[];
+      priority: 'high' | 'medium' | 'low';
+    }[];
   }[];
-  createdAt: string;
+  healthScore: number;
+  budgetTips: string[];
+  nutritionalBalance: {
+    proteins: number;
+    vegetables: number;
+    fruits: number;
+    grains: number;
+    dairy: number;
+  };
+  mealPrepTips: string[];
 }
 
 export default function SmartGrocery() {
@@ -72,8 +90,8 @@ export default function SmartGrocery() {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [detectionResult, setDetectionResult] = useState<FoodDetectionResult | null>(null);
   const [mealSuggestions, setMealSuggestions] = useState<MealSuggestion[]>([]);
-  const [groceryLists, setGroceryLists] = useState<GroceryList[]>([]);
-  const [activeTab, setActiveTab] = useState("camera");
+  const [groceryListSuggestion, setGroceryListSuggestion] = useState<GroceryListSuggestion | null>(null);
+  const [activeTab, setActiveTab] = useState("scanner");
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { currentUser } = useAuth();
@@ -91,14 +109,13 @@ export default function SmartGrocery() {
     enabled: !!currentUser?.id
   });
 
-  // Image upload and food detection mutation
+  // Food detection mutation
   const detectFoodMutation = useMutation({
     mutationFn: async (imageFile: File) => {
       const formData = new FormData();
       formData.append('image', imageFile);
       formData.append('userId', currentUser?.id || '');
       
-      // Get the authorization token
       const token = localStorage.getItem('accessToken');
       const headers: Record<string, string> = {};
       
@@ -162,6 +179,32 @@ export default function SmartGrocery() {
     },
   });
 
+  // Generate grocery list suggestion mutation
+  const generateGroceryListMutation = useMutation({
+    mutationFn: async (mealPlans?: string[]) => {
+      const response = await apiRequest('POST', '/api/ai/generate-grocery-list', {
+        mealPlans: mealPlans || [],
+        userId: currentUser?.id
+      });
+      return response.json();
+    },
+    onSuccess: (suggestion: GroceryListSuggestion) => {
+      setGroceryListSuggestion(suggestion);
+      setActiveTab("grocery");
+      toast({
+        title: "Grocery List Generated!",
+        description: `Created a personalized grocery list with ${suggestion.totalItems} items.`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to Generate Grocery List",
+        description: error.message || "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   // Create grocery list mutation
   const createGroceryListMutation = useMutation({
     mutationFn: async (listData: { name: string; items: any[] }) => {
@@ -174,9 +217,8 @@ export default function SmartGrocery() {
     onSuccess: () => {
       toast({
         title: "Grocery List Created!",
-        description: "Your personalized grocery list is ready.",
+        description: "Your personalized grocery list has been saved.",
       });
-      setActiveTab("grocery");
     },
     onError: (error: any) => {
       toast({
@@ -241,11 +283,33 @@ export default function SmartGrocery() {
     generateMealsMutation.mutate(detectedFoodNames);
   };
 
-  const handleCreateGroceryList = (meal: MealSuggestion) => {
+  const handleGenerateGroceryList = (selectedMeals?: string[]) => {
+    generateGroceryListMutation.mutate(selectedMeals);
+  };
+
+  const handleCreateGroceryListFromSuggestion = () => {
+    if (!groceryListSuggestion) return;
+    
+    const groceryItems = groceryListSuggestion.categories.flatMap(category =>
+      category.items.map(item => ({
+        name: item.name,
+        quantity: item.quantity,
+        category: category.name,
+        purchased: false
+      }))
+    );
+
+    createGroceryListMutation.mutate({
+      name: `Weekly Grocery List - ${new Date().toLocaleDateString()}`,
+      items: groceryItems
+    });
+  };
+
+  const handleCreateGroceryListFromMeal = (meal: MealSuggestion) => {
     const groceryItems = meal.ingredients.map(ingredient => ({
       name: ingredient,
-      quantity: "1 unit", // This could be improved with better parsing
-      category: "Fresh Produce", // This could be categorized better
+      quantity: "1 unit",
+      category: "Ingredients",
       purchased: false
     }));
 
@@ -264,6 +328,15 @@ export default function SmartGrocery() {
     }
   };
 
+  const getPriorityColor = (priority: string) => {
+    switch (priority) {
+      case 'high': return 'bg-red-100 text-red-800';
+      case 'medium': return 'bg-yellow-100 text-yellow-800';
+      case 'low': return 'bg-green-100 text-green-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
   return (
     <div className="container mx-auto p-6 max-w-6xl">
       <div className="text-center mb-8">
@@ -272,13 +345,13 @@ export default function SmartGrocery() {
           <h1 className="text-3xl font-bold text-foreground">Smart Grocery Assistant</h1>
         </div>
         <p className="text-muted-foreground text-lg">
-          Upload photos of vegetables and ingredients to get AI-powered meal suggestions and personalized grocery lists.
+          Scan food, get meal ideas, and create personalized grocery lists with AI-powered assistance.
         </p>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="camera" className="flex items-center gap-2">
+          <TabsTrigger value="scanner" className="flex items-center gap-2">
             <Camera className="h-4 w-4" />
             Food Scanner
           </TabsTrigger>
@@ -292,149 +365,196 @@ export default function SmartGrocery() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="camera" className="space-y-6">
+        {/* Food Scanner Tab */}
+        <TabsContent value="scanner" className="space-y-6">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Apple className="h-5 w-5 text-emerald-600" />
-                Upload Food Image
+                Food Scanner
               </CardTitle>
               <CardDescription>
-                Take or upload a photo of vegetables, fruits, or ingredients to get instant analysis and recommendations.
+                Upload photos of food to get detailed nutritional analysis and calorie information
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-8">
-                <div className="text-center">
-                  {imagePreview ? (
-                    <div className="space-y-4">
-                      <img 
-                        src={imagePreview} 
-                        alt="Selected food" 
-                        className="max-h-64 mx-auto rounded-lg shadow-md"
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  className="hidden"
+                />
+                
+                {imagePreview ? (
+                  <div className="space-y-4">
+                    <div className="relative">
+                      <img
+                        src={imagePreview}
+                        alt="Selected food"
+                        className="w-full max-w-md mx-auto rounded-lg shadow-md"
                       />
-                      <div className="flex gap-2 justify-center">
-                        <Button 
-                          onClick={handleAnalyzeImage}
-                          disabled={detectFoodMutation.isPending}
-                          className="bg-emerald-600 hover:bg-emerald-700"
-                        >
-                          {detectFoodMutation.isPending ? (
-                            <>
-                              <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                              Analyzing...
-                            </>
-                          ) : (
-                            <>
-                              <Zap className="h-4 w-4 mr-2" />
-                              Analyze Food
-                            </>
-                          )}
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          onClick={() => {
-                            setSelectedImage(null);
-                            setImagePreview(null);
-                            setDetectionResult(null);
-                          }}
-                        >
-                          <X className="h-4 w-4 mr-2" />
-                          Clear
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      <Upload className="h-12 w-12 text-muted-foreground/50 mx-auto mb-4" />
-                      <p className="text-lg font-medium text-muted-foreground mb-2">
-                        Upload an image of your vegetables or ingredients
-                      </p>
-                      <p className="text-sm text-muted-foreground mb-4">
-                        Supported formats: JPG, PNG, WEBP (Max 5MB)
-                      </p>
-                      <Button onClick={() => fileInputRef.current?.click()}>
-                        <Camera className="h-4 w-4 mr-2" />
-                        Choose Image
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        className="absolute top-2 right-2"
+                        onClick={() => {
+                          setSelectedImage(null);
+                          setImagePreview(null);
+                          setDetectionResult(null);
+                        }}
+                      >
+                        <X className="h-4 w-4" />
                       </Button>
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept="image/*"
-                        onChange={handleImageUpload}
-                        className="hidden"
-                      />
-                    </>
-                  )}
-                </div>
+                    </div>
+                    
+                    <div className="flex gap-2 justify-center">
+                      <Button
+                        onClick={handleAnalyzeImage}
+                        disabled={detectFoodMutation.isPending}
+                        className="bg-emerald-600 hover:bg-emerald-700"
+                      >
+                        {detectFoodMutation.isPending ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Analyzing...
+                          </>
+                        ) : (
+                          <>
+                            <Zap className="h-4 w-4 mr-2" />
+                            Analyze Food
+                          </>
+                        )}
+                      </Button>
+                      
+                      <Button
+                        variant="outline"
+                        onClick={() => fileInputRef.current?.click()}
+                      >
+                        <Upload className="h-4 w-4 mr-2" />
+                        Choose Different Image
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center">
+                    <Camera className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-lg font-medium text-gray-700 mb-2">
+                      Upload Food Image
+                    </p>
+                    <p className="text-gray-500 mb-4">
+                      Take a photo or upload an image of food items for AI analysis
+                    </p>
+                    <Button
+                      onClick={() => fileInputRef.current?.click()}
+                      className="bg-emerald-600 hover:bg-emerald-700"
+                    >
+                      <Upload className="h-4 w-4 mr-2" />
+                      Select Image
+                    </Button>
+                  </div>
+                )}
               </div>
-
+              
+              {/* Detection Results */}
               {detectionResult && (
-                <Card className="bg-emerald-50 dark:bg-emerald-900/20">
+                <Card className="bg-emerald-50 border-emerald-200">
                   <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300">
+                    <CardTitle className="flex items-center gap-2 text-emerald-800">
                       <CheckCircle className="h-5 w-5" />
                       Analysis Results
                     </CardTitle>
+                    <div className="flex items-center gap-4">
+                      <Badge variant="outline" className="text-emerald-700">
+                        {detectionResult.detectedFoods.length} Foods Detected
+                      </Badge>
+                      <Badge variant="outline" className="text-emerald-700">
+                        {detectionResult.totalCalories} Calories
+                      </Badge>
+                      <div className="flex items-center gap-1">
+                        <Heart className="h-4 w-4 text-red-500" />
+                        <span className="text-sm font-medium">
+                          Health Score: {detectionResult.healthScore}/10
+                        </span>
+                      </div>
+                    </div>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div className="bg-white dark:bg-gray-800 p-4 rounded-lg">
-                        <p className="text-sm text-muted-foreground">Total Calories</p>
-                        <p className="text-2xl font-bold text-emerald-600">{detectionResult.totalCalories}</p>
-                      </div>
-                      <div className="bg-white dark:bg-gray-800 p-4 rounded-lg">
-                        <p className="text-sm text-muted-foreground">Health Score</p>
-                        <p className="text-2xl font-bold text-emerald-600">{detectionResult.healthScore}/10</p>
-                      </div>
-                      <div className="bg-white dark:bg-gray-800 p-4 rounded-lg">
-                        <p className="text-sm text-muted-foreground">Items Found</p>
-                        <p className="text-2xl font-bold text-emerald-600">{detectionResult.detectedFoods.length}</p>
-                      </div>
+                    <div className="grid gap-3">
+                      {detectionResult.detectedFoods.map((food, index) => (
+                        <div key={index} className="bg-white p-4 rounded-lg border">
+                          <div className="flex items-center justify-between mb-2">
+                            <h4 className="font-medium text-gray-900">{food.name}</h4>
+                            <Badge variant="outline">
+                              {Math.round(food.confidence * 100)}% confidence
+                            </Badge>
+                          </div>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+                            <div>
+                              <span className="text-gray-500">Calories:</span>
+                              <span className="ml-1 font-medium">{food.calories}</span>
+                            </div>
+                            <div>
+                              <span className="text-gray-500">Protein:</span>
+                              <span className="ml-1 font-medium">{food.nutrients.protein}g</span>
+                            </div>
+                            <div>
+                              <span className="text-gray-500">Carbs:</span>
+                              <span className="ml-1 font-medium">{food.nutrients.carbs}g</span>
+                            </div>
+                            <div>
+                              <span className="text-gray-500">Fiber:</span>
+                              <span className="ml-1 font-medium">{food.nutrients.fiber}g</span>
+                            </div>
+                          </div>
+                          {food.nutrients.vitamins.length > 0 && (
+                            <div className="mt-2">
+                              <span className="text-gray-500 text-sm">Key Vitamins: </span>
+                              {food.nutrients.vitamins.map((vitamin, i) => (
+                                <Badge key={i} variant="secondary" className="mr-1 text-xs">
+                                  {vitamin}
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
                     </div>
-
-                    <div>
-                      <h4 className="font-semibold mb-2">Detected Foods:</h4>
-                      <div className="flex flex-wrap gap-2">
-                        {detectionResult.detectedFoods.map((food, index) => (
-                          <Badge key={index} variant="secondary" className="bg-emerald-100 text-emerald-800">
-                            {food.name} ({food.calories} cal)
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-
+                    
                     {detectionResult.recommendations.length > 0 && (
-                      <div>
-                        <h4 className="font-semibold mb-2">Personalized Recommendations:</h4>
+                      <div className="mt-4">
+                        <h4 className="font-medium text-gray-900 mb-2">AI Recommendations:</h4>
                         <ul className="space-y-1">
                           {detectionResult.recommendations.map((rec, index) => (
-                            <li key={index} className="flex items-start gap-2">
-                              <Heart className="h-4 w-4 text-emerald-600 mt-0.5 flex-shrink-0" />
-                              <span className="text-sm">{rec}</span>
+                            <li key={index} className="text-sm text-gray-700 flex items-start gap-2">
+                              <CheckCircle className="h-3 w-3 text-emerald-600 mt-0.5 flex-shrink-0" />
+                              {rec}
                             </li>
                           ))}
                         </ul>
                       </div>
                     )}
-
-                    <Button 
-                      onClick={handleGenerateMeals}
-                      disabled={generateMealsMutation.isPending}
-                      className="w-full bg-emerald-600 hover:bg-emerald-700"
-                    >
-                      {generateMealsMutation.isPending ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                          Generating Meals...
-                        </>
-                      ) : (
-                        <>
-                          <ChefHat className="h-4 w-4 mr-2" />
-                          Get Meal Suggestions
-                        </>
-                      )}
-                    </Button>
+                    
+                    <div className="flex gap-2 pt-4">
+                      <Button
+                        onClick={handleGenerateMeals}
+                        disabled={generateMealsMutation.isPending}
+                        className="bg-emerald-600 hover:bg-emerald-700"
+                      >
+                        {generateMealsMutation.isPending ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Generating...
+                          </>
+                        ) : (
+                          <>
+                            <ChefHat className="h-4 w-4 mr-2" />
+                            Get Meal Ideas
+                          </>
+                        )}
+                      </Button>
+                    </div>
                   </CardContent>
                 </Card>
               )}
@@ -442,91 +562,126 @@ export default function SmartGrocery() {
           </Card>
         </TabsContent>
 
+        {/* Meal Ideas Tab */}
         <TabsContent value="meals" className="space-y-6">
           {mealSuggestions.length === 0 ? (
             <Card>
-              <CardContent className="flex flex-col items-center justify-center p-8 text-center">
-                <ChefHat className="h-16 w-16 text-muted-foreground/50 mb-4" />
-                <h3 className="text-lg font-semibold mb-2">No Meal Suggestions Yet</h3>
-                <p className="text-muted-foreground mb-4">
-                  Upload and analyze food images to get personalized meal recommendations.
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <ChefHat className="h-16 w-16 text-gray-400 mb-4" />
+                <h3 className="text-xl font-semibold text-gray-700 mb-2">No Meal Ideas Yet</h3>
+                <p className="text-gray-500 text-center mb-6">
+                  Upload and analyze food images first, or generate meal ideas based on your health profile.
                 </p>
-                <Button onClick={() => setActiveTab("camera")}>
-                  <Camera className="h-4 w-4 mr-2" />
-                  Start Food Analysis
-                </Button>
+                <div className="flex gap-3">
+                  <Button
+                    onClick={() => setActiveTab("scanner")}
+                    variant="outline"
+                  >
+                    <Camera className="h-4 w-4 mr-2" />
+                    Scan Food First
+                  </Button>
+                  <Button
+                    onClick={() => handleGenerateGroceryList()}
+                    disabled={generateGroceryListMutation.isPending}
+                    className="bg-emerald-600 hover:bg-emerald-700"
+                  >
+                    {generateGroceryListMutation.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <ChefHat className="h-4 w-4 mr-2" />
+                        Generate Ideas
+                      </>
+                    )}
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           ) : (
-            <div className="grid gap-6">
+            <div className="grid gap-6 md:grid-cols-2">
               {mealSuggestions.map((meal, index) => (
                 <Card key={index} className="overflow-hidden">
                   <CardHeader>
                     <div className="flex items-start justify-between">
                       <div>
-                        <CardTitle className="flex items-center gap-2">
-                          <ChefHat className="h-5 w-5 text-orange-600" />
-                          {meal.name}
-                        </CardTitle>
-                        <CardDescription className="mt-2">{meal.description}</CardDescription>
+                        <CardTitle className="text-lg">{meal.name}</CardTitle>
+                        <CardDescription className="mt-1">
+                          {meal.description}
+                        </CardDescription>
                       </div>
-                      <div className="flex flex-col gap-2 text-right">
-                        <Badge className={getDifficultyColor(meal.difficulty)}>
-                          {meal.difficulty}
-                        </Badge>
-                        <span className="text-sm text-muted-foreground">{meal.prepTime} min</span>
+                      <Badge className={getDifficultyColor(meal.difficulty)}>
+                        {meal.difficulty}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-4 text-sm text-gray-600">
+                      <div className="flex items-center gap-1">
+                        <Clock className="h-4 w-4" />
+                        {meal.prepTime} min
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Zap className="h-4 w-4" />
+                        {meal.calories} cal
                       </div>
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <h4 className="font-semibold mb-2">Ingredients:</h4>
-                        <ul className="space-y-1 text-sm">
-                          {meal.ingredients.map((ingredient, i) => (
-                            <li key={i} className="flex items-center gap-2">
-                              <Plus className="h-3 w-3 text-emerald-600" />
-                              {ingredient}
-                            </li>
-                          ))}
-                        </ul>
+                    <div>
+                      <h4 className="font-medium mb-2">Ingredients:</h4>
+                      <div className="grid grid-cols-1 gap-1">
+                        {meal.ingredients.slice(0, 5).map((ingredient, i) => (
+                          <div key={i} className="text-sm text-gray-700 flex items-center gap-2">
+                            <div className="w-1 h-1 bg-emerald-600 rounded-full" />
+                            {ingredient}
+                          </div>
+                        ))}
+                        {meal.ingredients.length > 5 && (
+                          <div className="text-sm text-gray-500">
+                            +{meal.ingredients.length - 5} more ingredients
+                          </div>
+                        )}
                       </div>
-                      <div>
-                        <h4 className="font-semibold mb-2">Health Benefits:</h4>
-                        <ul className="space-y-1 text-sm">
-                          {meal.healthBenefits.map((benefit, i) => (
-                            <li key={i} className="flex items-center gap-2">
-                              <Heart className="h-3 w-3 text-red-500" />
-                              {benefit}
-                            </li>
-                          ))}
-                        </ul>
+                    </div>
+                    
+                    <div>
+                      <h4 className="font-medium mb-2">Health Benefits:</h4>
+                      <div className="flex flex-wrap gap-1">
+                        {meal.healthBenefits.slice(0, 3).map((benefit, i) => (
+                          <Badge key={i} variant="secondary" className="text-xs">
+                            {benefit}
+                          </Badge>
+                        ))}
                       </div>
                     </div>
 
-                    {meal.suitableFor.length > 0 && (
-                      <div>
-                        <h4 className="font-semibold mb-2">Suitable For:</h4>
-                        <div className="flex flex-wrap gap-2">
-                          {meal.suitableFor.map((diet, i) => (
-                            <Badge key={i} variant="outline">{diet}</Badge>
-                          ))}
-                        </div>
+                    <div>
+                      <h4 className="font-medium mb-2">Suitable For:</h4>
+                      <div className="flex flex-wrap gap-1">
+                        {meal.suitableFor.map((diet, i) => (
+                          <Badge key={i} variant="outline" className="text-xs">
+                            {diet}
+                          </Badge>
+                        ))}
                       </div>
-                    )}
-
-                    <div className="flex justify-between items-center pt-4 border-t">
-                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                        <span>🔥 {meal.calories} calories</span>
-                        <span>⏱️ {meal.prepTime} minutes</span>
-                      </div>
-                      <Button 
-                        onClick={() => handleCreateGroceryList(meal)}
-                        disabled={createGroceryListMutation.isPending}
+                    </div>
+                    
+                    <Separator />
+                    
+                    <div className="flex gap-2">
+                      <Button
                         size="sm"
+                        onClick={() => handleCreateGroceryListFromMeal(meal)}
+                        disabled={createGroceryListMutation.isPending}
+                        className="bg-emerald-600 hover:bg-emerald-700"
                       >
-                        <ShoppingCart className="h-4 w-4 mr-2" />
-                        Create Grocery List
+                        <ShoppingCart className="h-3 w-3 mr-1" />
+                        Create List
+                      </Button>
+                      <Button size="sm" variant="outline">
+                        <Star className="h-3 w-3 mr-1" />
+                        Save Recipe
                       </Button>
                     </div>
                   </CardContent>
@@ -536,71 +691,204 @@ export default function SmartGrocery() {
           )}
         </TabsContent>
 
+        {/* Grocery Lists Tab */}
         <TabsContent value="grocery" className="space-y-6">
+          {/* AI Grocery List Suggestion */}
+          {groceryListSuggestion ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Target className="h-5 w-5 text-emerald-600" />
+                  AI Generated Grocery List
+                </CardTitle>
+                <div className="flex items-center gap-4">
+                  <Badge variant="outline">
+                    {groceryListSuggestion.totalItems} Items
+                  </Badge>
+                  <div className="flex items-center gap-1">
+                    <Heart className="h-4 w-4 text-red-500" />
+                    <span className="text-sm font-medium">
+                      Health Score: {groceryListSuggestion.healthScore}/10
+                    </span>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Nutritional Balance */}
+                <div>
+                  <h4 className="font-medium mb-3">Nutritional Balance</h4>
+                  <div className="space-y-2">
+                    {Object.entries(groceryListSuggestion.nutritionalBalance).map(([key, value]) => (
+                      <div key={key} className="flex items-center gap-3">
+                        <span className="w-20 text-sm capitalize">{key}:</span>
+                        <Progress value={value} className="flex-1" />
+                        <span className="text-sm font-medium w-8">{value}%</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Grocery Categories */}
+                <div className="space-y-4">
+                  {groceryListSuggestion.categories.map((category, index) => (
+                    <div key={index}>
+                      <h4 className="font-medium mb-2 flex items-center gap-2">
+                        <ShoppingCart className="h-4 w-4" />
+                        {category.name}
+                      </h4>
+                      <div className="grid gap-2">
+                        {category.items.map((item, i) => (
+                          <div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium">{item.name}</span>
+                                <Badge className={getPriorityColor(item.priority)} variant="secondary">
+                                  {item.priority}
+                                </Badge>
+                              </div>
+                              <div className="text-sm text-gray-600">
+                                Quantity: {item.quantity}
+                              </div>
+                              {item.healthBenefits.length > 0 && (
+                                <div className="text-xs text-gray-500 mt-1">
+                                  Benefits: {item.healthBenefits.slice(0, 2).join(', ')}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <Separator />
+
+                {/* Tips */}
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div>
+                    <h4 className="font-medium mb-2">Budget Tips:</h4>
+                    <ul className="space-y-1">
+                      {groceryListSuggestion.budgetTips.map((tip, i) => (
+                        <li key={i} className="text-sm text-gray-700 flex items-start gap-2">
+                          <Heart className="h-3 w-3 text-green-600 mt-0.5 flex-shrink-0" />
+                          {tip}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div>
+                    <h4 className="font-medium mb-2">Meal Prep Tips:</h4>
+                    <ul className="space-y-1">
+                      {groceryListSuggestion.mealPrepTips.map((tip, i) => (
+                        <li key={i} className="text-sm text-gray-700 flex items-start gap-2">
+                          <ChefHat className="h-3 w-3 text-emerald-600 mt-0.5 flex-shrink-0" />
+                          {tip}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+
+                <Button
+                  onClick={handleCreateGroceryListFromSuggestion}
+                  disabled={createGroceryListMutation.isPending}
+                  className="w-full bg-emerald-600 hover:bg-emerald-700"
+                >
+                  {createGroceryListMutation.isPending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Creating List...
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Save This Grocery List
+                    </>
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <ShoppingCart className="h-16 w-16 text-gray-400 mb-4" />
+                <h3 className="text-xl font-semibold text-gray-700 mb-2">Generate Smart Grocery List</h3>
+                <p className="text-gray-500 text-center mb-6">
+                  Get AI-powered grocery recommendations based on your health profile and meal plans.
+                </p>
+                <Button
+                  onClick={() => handleGenerateGroceryList()}
+                  disabled={generateGroceryListMutation.isPending}
+                  className="bg-emerald-600 hover:bg-emerald-700"
+                >
+                  {generateGroceryListMutation.isPending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <TrendingUp className="h-4 w-4 mr-2" />
+                      Generate Smart List
+                    </>
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Existing Grocery Lists */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <ShoppingCart className="h-5 w-5 text-blue-600" />
-                Your Grocery Lists
-              </CardTitle>
+              <CardTitle>Your Grocery Lists</CardTitle>
               <CardDescription>
-                Manage your personalized grocery lists based on meal suggestions and health goals.
+                Previously created and saved grocery lists
               </CardDescription>
             </CardHeader>
             <CardContent>
               {groceryListsLoading ? (
-                <div className="flex justify-center items-center p-8">
-                  <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin" />
+                  <span className="ml-2">Loading your lists...</span>
                 </div>
-              ) : groceryLists.length === 0 ? (
-                <div className="text-center p-8">
-                  <ShoppingCart className="h-16 w-16 text-muted-foreground/50 mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">No Grocery Lists Yet</h3>
-                  <p className="text-muted-foreground mb-4">
-                    Create grocery lists from meal suggestions or start from scratch.
-                  </p>
-                  <Button onClick={() => setActiveTab("meals")}>
-                    <ChefHat className="h-4 w-4 mr-2" />
-                    Browse Meal Ideas
-                  </Button>
+              ) : (userGroceryLists as any[]).length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  No grocery lists created yet. Generate your first smart list above!
                 </div>
               ) : (
-                <div className="grid gap-4">
-                  {groceryLists.map((list) => (
-                    <Card key={list.id} className="border border-muted">
-                      <CardHeader className="pb-3">
-                        <CardTitle className="text-lg">{list.name}</CardTitle>
-                        <CardDescription>
-                          Created {new Date(list.createdAt).toLocaleDateString()}
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent>
-                        <ScrollArea className="h-32">
-                          <div className="space-y-2">
-                            {list.items.map((item, index) => (
-                              <div key={index} className="flex items-center justify-between py-1">
-                                <div className="flex items-center gap-2">
-                                  <input 
-                                    type="checkbox" 
-                                    checked={item.purchased}
-                                    className="rounded"
-                                    readOnly
-                                  />
-                                  <span className={item.purchased ? 'line-through text-muted-foreground' : ''}>
-                                    {item.name}
-                                  </span>
-                                </div>
-                                <Badge variant="outline" className="text-xs">
-                                  {item.quantity}
-                                </Badge>
-                              </div>
-                            ))}
-                          </div>
-                        </ScrollArea>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
+                <ScrollArea className="h-[300px]">
+                  <div className="space-y-3">
+                    {(userGroceryLists as any[]).map((list: any) => (
+                      <Card key={list.id} className="p-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="font-medium">{list.name}</h4>
+                          <Badge variant="outline">
+                            {Array.isArray(list.items) ? list.items.length : JSON.parse(list.items || '[]').length} items
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-gray-500 mb-3">
+                          Created: {new Date(list.createdAt).toLocaleDateString()}
+                        </p>
+                        <div className="space-y-1">
+                          {(Array.isArray(list.items) ? list.items : JSON.parse(list.items || '[]')).slice(0, 3).map((item: any, index: number) => (
+                            <div key={index} className="text-sm text-gray-700 flex items-center gap-2">
+                              <div className="w-1 h-1 bg-emerald-600 rounded-full" />
+                              {item.name} - {item.quantity}
+                            </div>
+                          ))}
+                          {(Array.isArray(list.items) ? list.items : JSON.parse(list.items || '[]')).length > 3 && (
+                            <div className="text-sm text-gray-500">
+                              +{(Array.isArray(list.items) ? list.items : JSON.parse(list.items || '[]')).length - 3} more items
+                            </div>
+                          )}
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                </ScrollArea>
               )}
             </CardContent>
           </Card>
@@ -612,7 +900,7 @@ export default function SmartGrocery() {
         <Alert className="mt-6">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
-            Complete your health profile to get more personalized meal suggestions and grocery recommendations.
+            Complete your health profile to get more personalized nutrition recommendations and meal suggestions.
           </AlertDescription>
         </Alert>
       )}
