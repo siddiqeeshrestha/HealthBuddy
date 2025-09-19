@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 import { 
   insertUserSchema,
   insertHealthProfileSchema,
+  onboardingHealthProfileSchema,
   insertHealthPlanSchema,
   insertTrackingEntrySchema,
   insertMentalWellnessEntrySchema,
@@ -208,6 +209,102 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       if (error.name === 'ZodError') {
         return res.status(400).json({ error: "Invalid health profile data", details: error.errors });
+      }
+      res.status(500).json({ error: "Failed to update health profile" });
+    }
+  });
+
+  // Health profile onboarding routes
+  app.post("/api/health-profile/onboarding", requireUser, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: "User not authenticated" });
+      }
+
+      // Validate onboarding data using comprehensive schema
+      const validatedData = onboardingHealthProfileSchema.parse({
+        ...req.body,
+        userId: req.user.id,
+      });
+
+      // Create profile with completion timestamp
+      const profileData = {
+        ...validatedData,
+        profileCompletedAt: new Date(),
+        lastProfileUpdate: new Date(),
+      };
+
+      const profile = await storage.createHealthProfile(profileData);
+      res.status(201).json(profile);
+    } catch (error: any) {
+      console.error('Onboarding profile creation error:', error);
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ 
+          error: "Invalid profile data", 
+          details: error.errors.map((e: any) => `${e.path.join('.')}: ${e.message}`)
+        });
+      }
+      res.status(500).json({ error: "Failed to create health profile", details: error.message });
+    }
+  });
+
+  // Check if user has completed onboarding
+  app.get("/api/health-profile/onboarding-status", requireUser, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: "User not authenticated" });
+      }
+
+      const profile = await storage.getHealthProfile(req.user.id);
+      
+      const onboardingStatus = {
+        hasCompletedOnboarding: profile && profile.profileCompletedAt !== null,
+        needsWeeklyUpdate: false,
+        lastUpdateDays: 0,
+        profile: profile
+      };
+
+      // Check if user needs weekly update
+      if (profile && profile.lastProfileUpdate) {
+        const daysSinceUpdate = Math.floor(
+          (Date.now() - new Date(profile.lastProfileUpdate).getTime()) / (1000 * 60 * 60 * 24)
+        );
+        onboardingStatus.needsWeeklyUpdate = daysSinceUpdate >= 7;
+        onboardingStatus.lastUpdateDays = daysSinceUpdate;
+      }
+
+      res.json(onboardingStatus);
+    } catch (error) {
+      console.error('Onboarding status check error:', error);
+      res.status(500).json({ error: "Failed to check onboarding status" });
+    }
+  });
+
+  // Update profile with weekly update timestamp
+  app.put("/api/health-profile/weekly-update", requireUser, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: "User not authenticated" });
+      }
+
+      const validatedData = insertHealthProfileSchema.parse({
+        ...req.body,
+        userId: req.user.id,
+        lastProfileUpdate: new Date(),
+      });
+
+      const profile = await storage.updateHealthProfile(req.user.id, validatedData);
+      if (!profile) {
+        return res.status(404).json({ error: "Health profile not found" });
+      }
+      res.json(profile);
+    } catch (error: any) {
+      console.error('Weekly profile update error:', error);
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ 
+          error: "Invalid profile data", 
+          details: error.errors.map((e: any) => `${e.path.join('.')}: ${e.message}`)
+        });
       }
       res.status(500).json({ error: "Failed to update health profile" });
     }
