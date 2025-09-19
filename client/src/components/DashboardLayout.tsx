@@ -432,14 +432,14 @@ function ProfileView({ profile, onClose, onEdit }: { profile: any; onClose: () =
           className="flex-1"
           data-testid={isProfileComplete ? "button-edit-profile" : "button-complete-profile"} 
           onClick={() => {
-            onClose();
             // For incomplete profiles, trigger onboarding. For complete profiles, show edit functionality.
             if (!isProfileComplete) {
+              onClose();
               // Invalidate onboarding status cache to re-trigger onboarding check
               queryClient.invalidateQueries({ queryKey: ['/api/health-profile/onboarding-status'] });
               // This will cause ProtectedRoute to re-check onboarding status and show onboarding form
             } else {
-              // For complete profiles, open edit dialog
+              // For complete profiles, open edit dialog (keep dialog open)
               onEdit();
             }
           }}
@@ -474,10 +474,7 @@ function EditProfileForm({ profile, onSave, onCancel }: { profile: any; onSave: 
 
   const updateProfileMutation = useMutation({
     mutationFn: async (data: any) => {
-      return apiRequest(`/api/health-profiles/${currentUser?.id}`, {
-        method: 'PUT',
-        body: JSON.stringify({ ...data, userId: currentUser?.id }),
-      });
+      return apiRequest('PUT', `/api/health-profiles/${currentUser?.id}`, { ...data, userId: currentUser?.id });
     },
     onSuccess: () => {
       toast({
@@ -666,7 +663,7 @@ function EditProfileForm({ profile, onSave, onCancel }: { profile: any; onSave: 
                                 onCheckedChange={(checked) => {
                                   return checked
                                     ? field.onChange([...field.value, goal.value])
-                                    : field.onChange(field.value?.filter((value) => value !== goal.value));
+                                    : field.onChange(field.value?.filter((value: any) => value !== goal.value));
                                 }}
                               />
                             </FormControl>
@@ -709,7 +706,7 @@ function EditProfileForm({ profile, onSave, onCancel }: { profile: any; onSave: 
                                 onCheckedChange={(checked) => {
                                   return checked
                                     ? field.onChange([...field.value, diet.value])
-                                    : field.onChange(field.value?.filter((value) => value !== diet.value));
+                                    : field.onChange(field.value?.filter((value: any) => value !== diet.value));
                                 }}
                               />
                             </FormControl>

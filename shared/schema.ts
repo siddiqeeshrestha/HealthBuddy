@@ -96,6 +96,18 @@ export const symptomEntries = pgTable("symptom_entries", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// HealthBuddy chat messages for mental wellness support
+export const chatMessages = pgTable("chat_messages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  role: text("role").notNull(), // 'user' or 'assistant'
+  content: text("content").notNull(),
+  mood: text("mood"), // detected mood from AI response
+  suggestions: text("suggestions").array(), // AI suggestions
+  resources: text("resources").array(), // AI resources
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // Insert schemas with validation
 export const insertUserSchema = createInsertSchema(users).omit({
   createdAt: true,
@@ -164,6 +176,30 @@ export const insertMentalWellnessEntrySchema = createInsertSchema(mentalWellness
 export const insertSymptomEntrySchema = createInsertSchema(symptomEntries).omit({
   id: true,
   createdAt: true,
+});
+
+export const insertChatMessageSchema = createInsertSchema(chatMessages).omit({
+  id: true,
+  createdAt: true,
+});
+
+// Doctor search request schema
+export const doctorSearchRequestSchema = z.object({
+  address: z.string().min(1, "Address is required").max(500, "Address too long"),
+  symptoms: z.array(z.string()).min(1, "At least one symptom is required").max(10, "Too many symptoms"),
+  severity: z.number().int().min(1, "Severity must be at least 1").max(10, "Severity must be at most 10")
+});
+
+// Doctor response schema
+export const doctorSchema = z.object({
+  name: z.string(),
+  degree: z.string(),
+  specialization: z.string(),
+  hospitalOrClinic: z.string(),
+  address: z.string(),
+  phone: z.string().optional(),
+  visitingHours: z.string().optional(),
+  rating: z.string().optional()
 });
 
 // Specific schema for symptom analysis request
@@ -247,6 +283,9 @@ export type InsertMentalWellnessEntry = z.infer<typeof insertMentalWellnessEntry
 
 export type SymptomEntry = typeof symptomEntries.$inferSelect;
 export type InsertSymptomEntry = z.infer<typeof insertSymptomEntrySchema>;
+
+export type ChatMessage = typeof chatMessages.$inferSelect;
+export type InsertChatMessage = z.infer<typeof insertChatMessageSchema>;
 
 // Specific tracking type definitions
 export type InsertCalorieLog = z.infer<typeof insertCalorieLogSchema>;

@@ -8,10 +8,12 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, AlertTriangle, CheckCircle, Info, X } from "lucide-react";
+import { Loader2, AlertTriangle, CheckCircle, Info, X, MapPin, Phone, Clock, GraduationCap, Building } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 
 interface SymptomAnalysis {
   possibleConditions: string[];
@@ -30,6 +32,17 @@ interface SymptomEntry {
   analysis: SymptomAnalysis;
 }
 
+interface Doctor {
+  name: string;
+  degree: string;
+  specialization: string;
+  hospitalOrClinic: string;
+  address: string;
+  phone?: string;
+  visitingHours?: string;
+  rating?: string;
+}
+
 export default function SymptomChecker() {
   const { currentUser } = useAuth();
   const { toast } = useToast();
@@ -39,6 +52,10 @@ export default function SymptomChecker() {
   const [duration, setDuration] = useState("");
   const [additionalInfo, setAdditionalInfo] = useState("");
   const [analysisResult, setAnalysisResult] = useState<SymptomAnalysis | null>(null);
+  const [doctorDialogOpen, setDoctorDialogOpen] = useState(false);
+  const [userAddress, setUserAddress] = useState("");
+  const [doctorResults, setDoctorResults] = useState<Doctor[] | null>(null);
+  const [isSearchingDoctors, setIsSearchingDoctors] = useState(false);
 
   // Get previous symptom entries
   const { data: symptoms = [], isLoading: isLoadingSymptoms } = useQuery({
@@ -79,6 +96,49 @@ export default function SymptomChecker() {
       });
     }
   });
+
+  const searchDoctorsMutation = useMutation({
+    mutationFn: async (data: {
+      address: string;
+      symptoms: string[];
+      severity: number;
+    }) => {
+      const response = await apiRequest('POST', '/api/doctors/search', data);
+      return response.json();
+    },
+    onSuccess: (data) => {
+      setDoctorResults(data.doctors);
+      setIsSearchingDoctors(false);
+      toast({
+        title: "Doctors found",
+        description: `Found ${data.doctors.length} relevant healthcare professionals in your area.`,
+      });
+    },
+    onError: (error: any) => {
+      console.error('Doctor search error:', error);
+      setIsSearchingDoctors(false);
+      toast({
+        title: "Search failed",
+        description: "Failed to find doctors. Please check your address and try again.",
+        variant: "destructive",
+      });
+    }
+  });
+
+  const handleDoctorSearch = () => {
+    if (!userAddress.trim() || !analysisResult) {
+      return;
+    }
+
+    setIsSearchingDoctors(true);
+    setDoctorResults(null);
+    
+    searchDoctorsMutation.mutate({
+      address: userAddress,
+      symptoms: currentSymptoms.length > 0 ? currentSymptoms : ["general consultation"],
+      severity: severity[0],
+    });
+  };
 
   const addSymptom = () => {
     if (newSymptom.trim() && !currentSymptoms.includes(newSymptom.trim())) {
@@ -325,6 +385,133 @@ export default function SymptomChecker() {
                     {analysisResult.disclaimer}
                   </AlertDescription>
                 </Alert>
+
+                {/* Find Relevant Doctor Button */}
+                <div className="pt-4">
+                  <Dialog open={doctorDialogOpen} onOpenChange={setDoctorDialogOpen}>
+                    <DialogTrigger asChild>
+                      <Button className="w-full" variant="outline" data-testid="button-find-doctor">
+                        <MapPin className="mr-2 h-4 w-4" />
+                        Find Relevant Doctor
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-4xl max-h-[80vh]">
+                      <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                          <Building className="h-5 w-5" />
+                          Find Healthcare Professionals
+                        </DialogTitle>
+                        <DialogDescription>
+                          Enter your address to find the best hospitals and doctors near you based on your symptoms.
+                        </DialogDescription>
+                      </DialogHeader>
+
+                      <div className="space-y-4">
+                        {/* Address Input */}
+                        <div>
+                          <Label htmlFor="address">Your Address</Label>
+                          <Input
+                            id="address"
+                            placeholder="Enter your full address (city, state, country)"
+                            value={userAddress}
+                            onChange={(e) => setUserAddress(e.target.value)}
+                            data-testid="input-address"
+                          />
+                        </div>
+
+                        {/* Search Button */}
+                        <Button 
+                          onClick={handleDoctorSearch}
+                          disabled={!userAddress.trim() || isSearchingDoctors}
+                          className="w-full"
+                          data-testid="button-search-doctors"
+                        >
+                          {isSearchingDoctors ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Searching for doctors...
+                            </>
+                          ) : (
+                            <>
+                              <MapPin className="mr-2 h-4 w-4" />
+                              Search for Doctors
+                            </>
+                          )}
+                        </Button>
+
+                        {/* Doctor Results */}
+                        {doctorResults && doctorResults.length > 0 && (
+                          <div className="mt-6">
+                            <h3 className="text-lg font-semibold mb-4">
+                              Found {doctorResults.length} Healthcare Professional{doctorResults.length !== 1 ? 's' : ''}
+                            </h3>
+                            <div className="space-y-4 max-h-[400px] overflow-y-auto">
+                              {doctorResults.map((doctor, index) => (
+                                <Card key={index} className="border-l-4 border-l-teal-500" data-testid={`card-doctor-${index}`}>
+                                  <CardContent className="pt-4">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                      <div>
+                                        <div className="flex items-start gap-2 mb-2">
+                                          <GraduationCap className="h-5 w-5 text-teal-600 mt-0.5" />
+                                          <div>
+                                            <h4 className="font-semibold text-lg">{doctor.name}</h4>
+                                            <p className="text-sm text-muted-foreground">{doctor.degree}</p>
+                                            <Badge variant="secondary" className="mt-1">
+                                              {doctor.specialization}
+                                            </Badge>
+                                          </div>
+                                        </div>
+                                        
+                                        <div className="flex items-start gap-2 mb-2">
+                                          <Building className="h-4 w-4 text-muted-foreground mt-0.5" />
+                                          <div>
+                                            <p className="font-medium">{doctor.hospitalOrClinic}</p>
+                                            <p className="text-sm text-muted-foreground">{doctor.address}</p>
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      <div className="space-y-3">
+                                        {doctor.phone && (
+                                          <div className="flex items-center gap-2">
+                                            <Phone className="h-4 w-4 text-muted-foreground" />
+                                            <span className="text-sm" data-testid={`text-phone-${index}`}>{doctor.phone}</span>
+                                          </div>
+                                        )}
+                                        
+                                        {doctor.visitingHours && (
+                                          <div className="flex items-center gap-2">
+                                            <Clock className="h-4 w-4 text-muted-foreground" />
+                                            <span className="text-sm" data-testid={`text-hours-${index}`}>{doctor.visitingHours}</span>
+                                          </div>
+                                        )}
+                                        
+                                        {doctor.rating && (
+                                          <div className="flex items-center gap-2">
+                                            <CheckCircle className="h-4 w-4 text-green-600" />
+                                            <span className="text-sm font-medium" data-testid={`text-rating-${index}`}>{doctor.rating}</span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </CardContent>
+                                </Card>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {doctorResults && doctorResults.length === 0 && (
+                          <div className="text-center py-8 text-muted-foreground">
+                            <Building className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                            <p>No healthcare professionals found for your location.</p>
+                            <p className="text-sm mt-1">Try searching with a different address or nearby city.</p>
+                          </div>
+                        )}
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                </div>
               </div>
             ) : (
               <div className="text-center py-12 text-gray-500 dark:text-gray-400">

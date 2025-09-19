@@ -16,9 +16,11 @@ import {
   insertWeightLogSchema,
   insertWaterLogSchema,
   insertSleepLogSchema,
+  insertChatMessageSchema,
+  doctorSearchRequestSchema,
   type User
 } from "@shared/schema";
-import { analyzeSymptoms, generateHealthPlan, generateMentalWellnessResponse } from "./utils/openai";
+import { analyzeSymptoms, generateHealthPlan, generateMentalWellnessResponse, findNearbyDoctors } from "./utils/openai";
 import { generateTokenPair, generateAccessToken, verifyToken, extractTokenFromHeader, type JWTPayload } from "./utils/jwt";
 
 // Extend Express Request type to include user
@@ -965,6 +967,113 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       res.status(500).json({ error: "Failed to analyze symptoms", details: error.message });
+    }
+  });
+
+  // Chat API endpoints
+  app.get("/api/chat/history", requireUser, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: "User not authenticated" });
+      }
+
+      const chatHistory = await storage.getChatMessages(req.user.id);
+      res.json(chatHistory);
+    } catch (error: any) {
+      console.error('Error fetching chat history:', error);
+      res.status(500).json({ error: "Failed to fetch chat history" });
+    }
+  });
+
+  app.post("/api/chat/message", requireUser, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: "User not authenticated" });
+      }
+
+      const { message } = req.body;
+      
+      if (!message || typeof message !== 'string') {
+        return res.status(400).json({ error: "Message is required" });
+      }
+
+      // Save user message
+      const userMessage = {
+        userId: req.user.id,
+        role: 'user' as const,
+        content: message
+      };
+      
+      const validatedUserMessage = insertChatMessageSchema.parse(userMessage);
+      await storage.createChatMessage(validatedUserMessage);
+
+      // Get user's recent mental wellness entries for context
+      const recentEntries = await storage.getMentalWellnessEntries(req.user.id, 5);
+      const moodHistory = recentEntries.map(entry => ({
+        date: entry.date.toISOString(),
+        mood: entry.moodRating || 5,
+        stress: entry.stressLevel || 5,
+        anxiety: entry.anxietyLevel || 5
+      }));
+
+      // Generate AI response using existing mental wellness function
+      const aiResponse = await generateMentalWellnessResponse(message, moodHistory);
+
+      // Save AI response
+      const assistantMessage = {
+        userId: req.user.id,
+        role: 'assistant' as const,
+        content: aiResponse.response,
+        mood: aiResponse.mood,
+        suggestions: aiResponse.suggestions,
+        resources: aiResponse.resources
+      };
+      
+      const validatedAssistantMessage = insertChatMessageSchema.parse(assistantMessage);
+      const savedAssistantMessage = await storage.createChatMessage(validatedAssistantMessage);
+
+      res.status(201).json({
+        userMessage: validatedUserMessage,
+        assistantMessage: savedAssistantMessage
+      });
+    } catch (error: any) {
+      console.error('Error handling chat message:', error);
+      res.status(500).json({ error: "Failed to process message", details: error.message });
+    }
+  });
+
+  // Doctor search API endpoint
+  app.post("/api/doctors/search", requireUser, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: "User not authenticated" });
+      }
+
+      // Validate request body using Zod schema
+      const parseResult = doctorSearchRequestSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ 
+          error: "Invalid request data", 
+          details: parseResult.error.errors 
+        });
+      }
+
+      const { address, symptoms, severity } = parseResult.data;
+
+      // Use web search to find real doctors
+      const doctors = await findNearbyDoctors(address, symptoms, severity);
+      
+      res.json({
+        doctors,
+        searchAddress: address,
+        searchSymptoms: symptoms
+      });
+    } catch (error: any) {
+      console.error('Error searching for doctors:', error);
+      res.status(500).json({ 
+        error: "Failed to search for doctors", 
+        details: error.message 
+      });
     }
   });
 

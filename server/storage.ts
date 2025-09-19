@@ -11,12 +11,15 @@ import {
   type InsertMentalWellnessEntry,
   type SymptomEntry,
   type InsertSymptomEntry,
+  type ChatMessage,
+  type InsertChatMessage,
   users,
   healthProfiles,
   healthPlans,
   trackingEntries,
   mentalWellnessEntries,
-  symptomEntries
+  symptomEntries,
+  chatMessages
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { drizzle } from "drizzle-orm/neon-http";
@@ -62,6 +65,10 @@ export interface IStorage {
   createSymptomEntry(entry: InsertSymptomEntry): Promise<SymptomEntry>;
   updateSymptomEntry(id: string, entry: Partial<InsertSymptomEntry>): Promise<SymptomEntry | undefined>;
   deleteSymptomEntry(id: string): Promise<boolean>;
+  
+  // Chat messages methods
+  getChatMessages(userId: string, limit?: number): Promise<ChatMessage[]>;
+  createChatMessage(message: InsertChatMessage): Promise<ChatMessage>;
 }
 
 export class MemStorage implements IStorage {
@@ -71,6 +78,7 @@ export class MemStorage implements IStorage {
   private trackingEntries: Map<string, TrackingEntry>;
   private mentalWellnessEntries: Map<string, MentalWellnessEntry>;
   private symptomEntries: Map<string, SymptomEntry>;
+  private chatMessages: Map<string, ChatMessage>;
 
   constructor() {
     this.users = new Map();
@@ -79,6 +87,7 @@ export class MemStorage implements IStorage {
     this.trackingEntries = new Map();
     this.mentalWellnessEntries = new Map();
     this.symptomEntries = new Map();
+    this.chatMessages = new Map();
   }
 
   // User methods
@@ -341,6 +350,31 @@ export class MemStorage implements IStorage {
   async deleteSymptomEntry(id: string): Promise<boolean> {
     return this.symptomEntries.delete(id);
   }
+
+  // Chat messages methods
+  async getChatMessages(userId: string, limit: number = 50): Promise<ChatMessage[]> {
+    const userMessages = Array.from(this.chatMessages.values())
+      .filter(msg => msg.userId === userId)
+      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+      .slice(-limit);
+    return userMessages;
+  }
+
+  async createChatMessage(insertMessage: InsertChatMessage): Promise<ChatMessage> {
+    const id = randomUUID();
+    const message: ChatMessage = { 
+      id,
+      userId: insertMessage.userId,
+      role: insertMessage.role,
+      content: insertMessage.content,
+      mood: insertMessage.mood ?? null,
+      suggestions: insertMessage.suggestions ?? null,
+      resources: insertMessage.resources ?? null,
+      createdAt: new Date()
+    };
+    this.chatMessages.set(id, message);
+    return message;
+  }
 }
 
 // PostgreSQL Storage implementation using Drizzle ORM
@@ -537,6 +571,19 @@ export class PostgresStorage implements IStorage {
   async deleteSymptomEntry(id: string): Promise<boolean> {
     const result = await this.db.delete(symptomEntries).where(eq(symptomEntries.id, id));
     return result.rowCount > 0;
+  }
+
+  // Chat messages methods
+  async getChatMessages(userId: string, limit = 50): Promise<ChatMessage[]> {
+    return await this.db.select().from(chatMessages)
+      .where(eq(chatMessages.userId, userId))
+      .orderBy(chatMessages.createdAt)
+      .limit(limit);
+  }
+
+  async createChatMessage(insertMessage: InsertChatMessage): Promise<ChatMessage> {
+    const result = await this.db.insert(chatMessages).values(insertMessage).returning();
+    return result[0];
   }
 }
 

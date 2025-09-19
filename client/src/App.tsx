@@ -12,6 +12,7 @@ import Signup from "@/pages/signup";
 import DashboardHome from "@/pages/dashboard/home";
 import DailyTracking from "@/pages/dashboard/tracking";
 import SymptomChecker from "@/pages/dashboard/symptom-checker";
+import MentalWellness from "@/pages/dashboard/MentalWellness";
 import HealthPlans from "@/pages/health-plans";
 import NotFound from "@/pages/not-found";
 
@@ -29,12 +30,7 @@ function Router() {
               <Route path="/plans" component={HealthPlans} />
               <Route path="/tracking" component={DailyTracking} />
               <Route path="/symptoms" component={SymptomChecker} />
-              <Route path="/wellness">
-                <div className="p-8 text-center">
-                  <h2 className="text-2xl font-bold text-foreground mb-4">Mental Wellness</h2>
-                  <p className="text-muted-foreground">Coming soon...</p>
-                </div>
-              </Route>
+              <Route path="/wellness" component={MentalWellness} />
               <Route component={NotFound} />
             </Switch>
           </DashboardLayout>
