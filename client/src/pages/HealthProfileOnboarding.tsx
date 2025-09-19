@@ -295,11 +295,11 @@ export default function HealthProfileOnboarding({ onComplete, onSkip }: HealthPr
                               : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'
                           }`}
                           onClick={() => {
-                            const currentGoals = Array.isArray(field.value) ? field.value : [];
+                            const currentGoals = Array.isArray(field.value) ? [...field.value] : [];
                             if (currentGoals.includes(option.value as any)) {
                               field.onChange(currentGoals.filter((goal) => goal !== option.value));
                             } else {
-                              field.onChange([...currentGoals, option.value]);
+                              field.onChange([...currentGoals, option.value as any]);
                             }
                           }}
                           data-testid={`goal-${option.value}`}
@@ -583,7 +583,10 @@ export default function HealthProfileOnboarding({ onComplete, onSkip }: HealthPr
                   {currentStep < 4 ? (
                     <Button
                       type="button"
-                      onClick={nextStep}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        nextStep();
+                      }}
                       data-testid="button-next"
                     >
                       Next

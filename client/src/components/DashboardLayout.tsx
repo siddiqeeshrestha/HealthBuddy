@@ -24,6 +24,17 @@ import { useQuery } from '@tanstack/react-query';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { queryClient } from '@/lib/queryClient';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Textarea } from '@/components/ui/textarea';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { insertHealthProfileSchema } from '@shared/schema';
+import { apiRequest } from '@/lib/queryClient';
+import { useMutation } from '@tanstack/react-query';
+import { useToast } from '@/hooks/use-toast';
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -197,6 +208,7 @@ function SidebarContent({ navigation, isActive }: {
 
 function ProfileDialog() {
   const [open, setOpen] = useState(false);
+  const [editMode, setEditMode] = useState(false);
   const { currentUser } = useAuth();
 
   const { data: profile, isLoading } = useQuery({
@@ -237,7 +249,11 @@ function ProfileDialog() {
               </div>
             </div>
           ) : profile ? (
-            <ProfileView profile={profile} onClose={() => setOpen(false)} />
+            editMode ? (
+              <EditProfileForm profile={profile} onSave={() => { setEditMode(false); setOpen(false); }} onCancel={() => setEditMode(false)} />
+            ) : (
+              <ProfileView profile={profile} onClose={() => setOpen(false)} onEdit={() => setEditMode(true)} />
+            )
           ) : (
             <div className="p-4 text-center text-muted-foreground">
               <User className="h-12 w-12 mx-auto mb-4 opacity-50" />
@@ -251,7 +267,7 @@ function ProfileDialog() {
   );
 }
 
-function ProfileView({ profile, onClose }: { profile: any; onClose: () => void }) {
+function ProfileView({ profile, onClose, onEdit }: { profile: any; onClose: () => void; onEdit: () => void }) {
   const formatArray = (arr: string[] | null) => {
     if (!arr || arr.length === 0) return 'None specified';
     return arr.map(item => item.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())).join(', ');
@@ -423,8 +439,8 @@ function ProfileView({ profile, onClose }: { profile: any; onClose: () => void }
               queryClient.invalidateQueries({ queryKey: ['/api/health-profile/onboarding-status'] });
               // This will cause ProtectedRoute to re-check onboarding status and show onboarding form
             } else {
-              // For complete profiles, could implement edit functionality later
-              window.location.hash = '#edit-profile';
+              // For complete profiles, open edit dialog
+              onEdit();
             }
           }}
         >
@@ -432,5 +448,296 @@ function ProfileView({ profile, onClose }: { profile: any; onClose: () => void }
         </Button>
       </div>
     </div>
+  );
+}
+
+function EditProfileForm({ profile, onSave, onCancel }: { profile: any; onSave: () => void; onCancel: () => void }) {
+  const { toast } = useToast();
+  const { currentUser } = useAuth();
+
+  const form = useForm({
+    resolver: zodResolver(insertHealthProfileSchema),
+    defaultValues: {
+      gender: profile.gender || '',
+      age: profile.age || '',
+      height: profile.height || '',
+      weight: profile.weight || '',
+      goalWeight: profile.goalWeight || '',
+      activityLevel: profile.activityLevel || '',
+      healthGoals: profile.healthGoals || [],
+      medicalConditions: profile.medicalConditions || [],
+      allergies: profile.allergies || [],
+      medications: profile.medications || [],
+      dietaryPreferences: profile.dietaryPreferences || [],
+    },
+  });
+
+  const updateProfileMutation = useMutation({
+    mutationFn: async (data: any) => {
+      return apiRequest(`/api/health-profiles/${currentUser?.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ ...data, userId: currentUser?.id }),
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Profile updated",
+        description: "Your health profile has been successfully updated.",
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/health-profiles', currentUser?.id] });
+      onSave();
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Update failed",
+        description: error.message || "Failed to update profile. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const onSubmit = (data: any) => {
+    updateProfileMutation.mutate(data);
+  };
+
+  const fitnessGoalsOptions = [
+    { value: 'weight_loss', label: 'Weight Loss' },
+    { value: 'muscle_gain', label: 'Muscle Gain' },
+    { value: 'general_fitness', label: 'General Fitness' },
+    { value: 'endurance', label: 'Endurance' },
+    { value: 'strength', label: 'Strength' },
+    { value: 'flexibility', label: 'Flexibility' },
+    { value: 'stress_relief', label: 'Stress Relief' },
+  ];
+
+  const dietaryOptions = [
+    { value: 'none', label: 'No specific diet' },
+    { value: 'vegetarian', label: 'Vegetarian' },
+    { value: 'vegan', label: 'Vegan' },
+    { value: 'keto', label: 'Ketogenic' },
+    { value: 'paleo', label: 'Paleo' },
+    { value: 'gluten_free', label: 'Gluten Free' },
+    { value: 'dairy_free', label: 'Dairy Free' },
+    { value: 'low_carb', label: 'Low Carb' },
+    { value: 'mediterranean', label: 'Mediterranean' },
+    { value: 'intermittent_fasting', label: 'Intermittent Fasting' },
+  ];
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 p-4">
+        <div className="flex justify-between items-center">
+          <h3 className="text-lg font-semibold">Edit Health Profile</h3>
+        </div>
+
+        {/* Basic Information */}
+        <div className="space-y-4">
+          <h4 className="text-md font-medium">Basic Information</h4>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <FormField
+              control={form.control}
+              name="gender"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Gender</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger data-testid="select-gender">
+                        <SelectValue placeholder="Select gender" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="male">Male</SelectItem>
+                      <SelectItem value="female">Female</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                      <SelectItem value="prefer_not_to_say">Prefer not to say</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="age"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Age</FormLabel>
+                  <FormControl>
+                    <Input {...field} type="number" placeholder="Age" data-testid="input-age" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="height"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Height (cm)</FormLabel>
+                  <FormControl>
+                    <Input {...field} type="number" placeholder="Height in cm" data-testid="input-height" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="weight"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Weight (kg)</FormLabel>
+                  <FormControl>
+                    <Input {...field} type="number" placeholder="Weight in kg" data-testid="input-weight" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="goalWeight"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Goal Weight (kg)</FormLabel>
+                  <FormControl>
+                    <Input {...field} type="number" placeholder="Goal weight (optional)" data-testid="input-goal-weight" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="activityLevel"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Activity Level</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger data-testid="select-activity-level">
+                        <SelectValue placeholder="Select activity level" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="sedentary">Sedentary</SelectItem>
+                      <SelectItem value="light">Light</SelectItem>
+                      <SelectItem value="moderate">Moderate</SelectItem>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="very_active">Very Active</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+        </div>
+
+        {/* Health Goals */}
+        <div className="space-y-4">
+          <h4 className="text-md font-medium">Health Goals</h4>
+          <FormField
+            control={form.control}
+            name="healthGoals"
+            render={() => (
+              <FormItem>
+                <div className="grid grid-cols-2 gap-2">
+                  {fitnessGoalsOptions.map((goal) => (
+                    <FormField
+                      key={goal.value}
+                      control={form.control}
+                      name="healthGoals"
+                      render={({ field }) => {
+                        return (
+                          <FormItem key={goal.value} className="flex flex-row items-start space-x-3 space-y-0">
+                            <FormControl>
+                              <Checkbox
+                                data-testid={`checkbox-goal-${goal.value}`}
+                                checked={field.value?.includes(goal.value)}
+                                onCheckedChange={(checked) => {
+                                  return checked
+                                    ? field.onChange([...field.value, goal.value])
+                                    : field.onChange(field.value?.filter((value) => value !== goal.value));
+                                }}
+                              />
+                            </FormControl>
+                            <FormLabel className="text-sm font-normal">
+                              {goal.label}
+                            </FormLabel>
+                          </FormItem>
+                        );
+                      }}
+                    />
+                  ))}
+                </div>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        {/* Dietary Preferences */}
+        <div className="space-y-4">
+          <h4 className="text-md font-medium">Dietary Preferences</h4>
+          <FormField
+            control={form.control}
+            name="dietaryPreferences"
+            render={() => (
+              <FormItem>
+                <div className="grid grid-cols-2 gap-2">
+                  {dietaryOptions.map((diet) => (
+                    <FormField
+                      key={diet.value}
+                      control={form.control}
+                      name="dietaryPreferences"
+                      render={({ field }) => {
+                        return (
+                          <FormItem key={diet.value} className="flex flex-row items-start space-x-3 space-y-0">
+                            <FormControl>
+                              <Checkbox
+                                data-testid={`checkbox-diet-${diet.value}`}
+                                checked={field.value?.includes(diet.value)}
+                                onCheckedChange={(checked) => {
+                                  return checked
+                                    ? field.onChange([...field.value, diet.value])
+                                    : field.onChange(field.value?.filter((value) => value !== diet.value));
+                                }}
+                              />
+                            </FormControl>
+                            <FormLabel className="text-sm font-normal">
+                              {diet.label}
+                            </FormLabel>
+                          </FormItem>
+                        );
+                      }}
+                    />
+                  ))}
+                </div>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex gap-3 pt-4">
+          <Button type="button" variant="outline" className="flex-1" onClick={onCancel} data-testid="button-cancel-edit">
+            Cancel
+          </Button>
+          <Button type="submit" className="flex-1" disabled={updateProfileMutation.isPending} data-testid="button-save-profile">
+            {updateProfileMutation.isPending ? "Saving..." : "Save Changes"}
+          </Button>
+        </div>
+      </form>
+    </Form>
   );
 }
