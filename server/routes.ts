@@ -19,6 +19,7 @@ import {
   type User
 } from "@shared/schema";
 import { analyzeSymptoms, generateHealthPlan, generateMentalWellnessResponse } from "./utils/openai";
+import { generateTokenPair, verifyToken, extractTokenFromHeader, type JWTPayload } from "./utils/jwt";
 
 // Extend Express Request type to include user
 declare global {
@@ -28,28 +29,42 @@ declare global {
     }
   }
 }
-// Token-based authentication middleware
+// JWT-based authentication middleware
 async function requireUser(req: any, res: any, next: any) {
   try {
-    const token = req.headers.authorization?.replace('Bearer ', '');
+    const token = extractTokenFromHeader(req.headers.authorization);
     console.log('RequireUser middleware - Token:', token ? 'Present' : 'Missing');
     
     if (!token) {
       return res.status(401).json({ error: "Authorization token required" });
     }
 
-    // Using user ID as token for simplicity
-    const user = await storage.getUser(token);
+    // Verify JWT token and extract payload
+    const payload: JWTPayload = verifyToken(token);
+    console.log('RequireUser middleware - Token verified for user:', payload.userId);
+    
+    // Ensure it's an access token
+    if (payload.type !== 'access') {
+      return res.status(401).json({ error: "Invalid token type" });
+    }
+
+    // Get full user data from database
+    const user = await storage.getUser(payload.userId);
     console.log('RequireUser middleware - Found user:', user ? 'Yes' : 'No');
     
     if (!user) {
-      return res.status(401).json({ error: "Invalid or expired token" });
+      return res.status(401).json({ error: "User not found" });
     }
 
     req.user = user;
     next();
-  } catch (error) {
-    console.error('RequireUser middleware - Error:', error);
+  } catch (error: any) {
+    console.error('RequireUser middleware - Error:', error.message);
+    if (error.message === 'Token expired') {
+      return res.status(401).json({ error: "Token expired" });
+    } else if (error.message === 'Invalid token') {
+      return res.status(401).json({ error: "Invalid token" });
+    }
     return res.status(500).json({ error: "Authentication error" });
   }
 }
@@ -78,12 +93,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = await storage.createUser({
         email,
         passwordHash,
-        displayName: displayName || null
+        displayName: displayName || null,
+        role: 'END_USER' // Default role
       });
+
+      // Generate secure JWT tokens
+      const { accessToken, refreshToken } = generateTokenPair(user);
 
       // Return user without password hash
       const { passwordHash: _, ...userWithoutPassword } = user;
-      res.status(201).json({ user: userWithoutPassword });
+      res.status(201).json({ 
+        user: userWithoutPassword,
+        accessToken,
+        refreshToken
+      });
     } catch (error: any) {
       console.error("Registration error:", error);
       res.status(500).json({ error: "Failed to register user" });
@@ -110,10 +133,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "Invalid email or password" });
       }
 
-      // For simplicity, we'll use the user ID as the session token
-      // In production, use proper JWT tokens or session management
+      // Generate secure JWT tokens
+      const { accessToken, refreshToken } = generateTokenPair(user);
+
+      // Return user without password hash
       const { passwordHash: _, ...userWithoutPassword } = user;
-      res.json({ user: userWithoutPassword, token: user.id });
+      res.json({ 
+        user: userWithoutPassword, 
+        accessToken,
+        refreshToken
+      });
     } catch (error: any) {
       console.error("Login error:", error);
       res.status(500).json({ error: "Failed to login" });
@@ -125,23 +154,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ message: "Logged out successfully" });
   });
 
+  app.post("/api/auth/refresh", async (req, res) => {
+    try {
+      const token = extractTokenFromHeader(req.headers.authorization);
+      if (!token) {
+        return res.status(401).json({ error: "Refresh token required" });
+      }
+
+      // Verify refresh token
+      const payload = verifyToken(token);
+      
+      // Ensure it's a refresh token
+      if (payload.type !== 'refresh') {
+        return res.status(401).json({ error: "Invalid token type" });
+      }
+
+      // Get current user data
+      const user = await storage.getUser(payload.userId);
+      if (!user) {
+        return res.status(401).json({ error: "User not found" });
+      }
+
+      // Generate new access token
+      const accessToken = generateAccessToken(user);
+      
+      res.json({ accessToken });
+    } catch (error: any) {
+      console.error("Token refresh error:", error.message);
+      if (error.message === 'Token expired') {
+        return res.status(401).json({ error: "Refresh token expired" });
+      } else if (error.message === 'Invalid token') {
+        return res.status(401).json({ error: "Invalid refresh token" });
+      }
+      res.status(500).json({ error: "Failed to refresh token" });
+    }
+  });
+
   app.get("/api/auth/me", async (req, res) => {
     try {
-      const token = req.headers.authorization?.replace('Bearer ', '');
+      const token = extractTokenFromHeader(req.headers.authorization);
       if (!token) {
         return res.status(401).json({ error: "No token provided" });
       }
 
-      // Using user ID as token for simplicity
-      const user = await storage.getUser(token);
+      // Verify JWT token
+      const payload = verifyToken(token);
+      
+      // Ensure it's an access token
+      if (payload.type !== 'access') {
+        return res.status(401).json({ error: "Invalid token type" });
+      }
+
+      // Get current user data
+      const user = await storage.getUser(payload.userId);
       if (!user) {
-        return res.status(401).json({ error: "Invalid token" });
+        return res.status(401).json({ error: "User not found" });
       }
 
       const { passwordHash: _, ...userWithoutPassword } = user;
       res.json({ user: userWithoutPassword });
     } catch (error: any) {
-      console.error("Auth check error:", error);
+      console.error("Auth check error:", error.message);
+      if (error.message === 'Token expired') {
+        return res.status(401).json({ error: "Token expired" });
+      } else if (error.message === 'Invalid token') {
+        return res.status(401).json({ error: "Invalid token" });
+      }
       res.status(500).json({ error: "Failed to verify authentication" });
     }
   });

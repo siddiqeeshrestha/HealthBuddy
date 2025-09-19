@@ -14,8 +14,8 @@ export async function apiRequest(
 ): Promise<Response> {
   const headers: Record<string, string> = {};
   
-  // Add Authorization header if token exists
-  const token = localStorage.getItem('authToken');
+  // Add Authorization header if access token exists
+  const token = localStorage.getItem('accessToken');
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
@@ -44,8 +44,8 @@ export const getQueryFn: <T>(options: {
   async ({ queryKey }) => {
     const headers: Record<string, string> = {};
     
-    // Add Authorization header if token exists
-    const token = localStorage.getItem('authToken');
+    // Add Authorization header if access token exists
+    const token = localStorage.getItem('accessToken');
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
