@@ -382,11 +382,13 @@ export class PostgresStorage implements IStorage {
   private db;
 
   constructor() {
-    if (!process.env.DATABASE_URL) {
-      throw new Error('DATABASE_URL environment variable is required');
+    // Use NEON_DATABASE_URL if available, fallback to DATABASE_URL
+    const dbUrl = process.env.NEON_DATABASE_URL || process.env.DATABASE_URL;
+    if (!dbUrl) {
+      throw new Error('NEON_DATABASE_URL or DATABASE_URL environment variable is required');
     }
-    console.log('PostgresStorage - Initializing with DATABASE_URL:', process.env.DATABASE_URL ? 'Present' : 'Missing');
-    const sql = neon(process.env.DATABASE_URL);
+    console.log('PostgresStorage - Initializing with database URL:', dbUrl ? 'Present' : 'Missing');
+    const sql = neon(dbUrl);
     console.log('PostgresStorage - Neon SQL client created:', typeof sql);
     this.db = drizzle(sql);
     console.log('PostgresStorage - Drizzle client initialized');
