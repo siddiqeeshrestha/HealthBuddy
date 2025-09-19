@@ -13,6 +13,7 @@ import DashboardHome from "@/pages/dashboard/home";
 import DailyTracking from "@/pages/dashboard/tracking";
 import SymptomChecker from "@/pages/dashboard/symptom-checker";
 import MentalWellness from "@/pages/dashboard/MentalWellness";
+import SmartGrocery from "@/pages/dashboard/SmartGrocery";
 import HealthPlans from "@/pages/health-plans";
 import NotFound from "@/pages/not-found";
 
@@ -31,6 +32,7 @@ function Router() {
               <Route path="/tracking" component={DailyTracking} />
               <Route path="/symptoms" component={SymptomChecker} />
               <Route path="/wellness" component={MentalWellness} />
+              <Route path="/grocery" component={SmartGrocery} />
               <Route component={NotFound} />
             </Switch>
           </DashboardLayout>

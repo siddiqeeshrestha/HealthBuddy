@@ -51,6 +51,38 @@ export interface HealthReportSummary {
   areasForImprovement: string[];
 }
 
+// Food detection result interface
+export interface FoodDetectionResult {
+  detectedFoods: {
+    name: string;
+    confidence: number;
+    calories: number;
+    nutrients: {
+      protein: number;
+      carbs: number;
+      fat: number;
+      fiber: number;
+      vitamins: string[];
+    };
+  }[];
+  totalCalories: number;
+  healthScore: number;
+  recommendations: string[];
+}
+
+// Meal suggestion interface
+export interface MealSuggestion {
+  name: string;
+  description: string;
+  calories: number;
+  prepTime: number;
+  difficulty: 'Easy' | 'Medium' | 'Hard';
+  ingredients: string[];
+  instructions: string[];
+  healthBenefits: string[];
+  suitableFor: string[];
+}
+
 /**
  * Generate a personalized health plan using AI
  */
@@ -468,5 +500,242 @@ Return this exact JSON format:
   } catch (error) {
     console.error('Error finding nearby doctors:', error);
     throw new Error('Failed to find nearby doctors: ' + (error as Error).message);
+  }
+}
+
+/**
+ * Analyze food image and detect ingredients with nutritional information
+ */
+export async function analyzeFood(
+  imageBuffer: Buffer,
+  userProfile?: any
+): Promise<FoodDetectionResult> {
+  try {
+    // Convert image to base64
+    const base64Image = imageBuffer.toString('base64');
+    
+    const healthContext = userProfile ? `
+User's Health Context:
+- Age: ${userProfile.age || 'Not specified'}
+- Health Goals: ${userProfile.healthGoals?.join(', ') || 'General wellness'}
+- Activity Level: ${userProfile.activityLevel || 'Not specified'}
+- Medical Conditions: ${userProfile.medicalConditions?.join(', ') || 'None specified'}
+- Dietary Restrictions: ${userProfile.dietaryRestrictions?.join(', ') || 'None specified'}
+- Allergies: ${userProfile.allergies?.join(', ') || 'None specified'}
+
+Please provide personalized recommendations based on this health profile.
+` : 'No health profile available - provide general recommendations.';
+
+    const prompt = `You are a professional nutritionist and food recognition expert. Analyze this food/vegetable image carefully and provide detailed, accurate nutritional information.
+
+${healthContext}
+
+CRITICAL INSTRUCTIONS:
+1. Identify ALL visible foods/vegetables in the image accurately
+2. If you can't clearly identify something, indicate lower confidence
+3. Provide realistic nutritional values per 100g for each identified food
+4. Calculate total calories based on estimated portion sizes in the image
+5. Give a health score (1-10) based on nutritional density and health benefits
+6. Provide personalized recommendations based on the user's health profile
+
+Return ONLY a JSON object with this EXACT structure:
+{
+  "detectedFoods": [
+    {
+      "name": "actual food name (e.g., Carrot, Broccoli, etc.)",
+      "confidence": 0.95,
+      "calories": 41,
+      "nutrients": {
+        "protein": 0.9,
+        "carbs": 9.6,
+        "fat": 0.2,
+        "fiber": 2.8,
+        "vitamins": ["Beta-carotene", "Vitamin K", "Vitamin C"]
+      }
+    }
+  ],
+  "totalCalories": 150,
+  "healthScore": 8.5,
+  "recommendations": [
+    "Specific recommendation based on detected food and user profile",
+    "Another relevant recommendation"
+  ]
+}
+
+Be precise and accurate with food identification. If it's a carrot, say carrot. If it's broccoli, say broccoli. Don't guess or default to generic answers.`;
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: prompt },
+            {
+              type: "image_url",
+              image_url: {
+                url: `data:image/jpeg;base64,${base64Image}`,
+              },
+            },
+          ],
+        },
+      ],
+      max_tokens: 1500,
+      temperature: 0.1, // Low temperature for more consistent, factual responses
+    });
+
+    const content = response.choices[0]?.message?.content;
+    if (!content) {
+      throw new Error('No response from AI');
+    }
+
+    console.log('Raw AI response:', content);
+
+    // Clean the response in case it has markdown formatting
+    const cleanedContent = content.replace(/```json\n?|\n?```/g, '').trim();
+    
+    let result;
+    try {
+      result = JSON.parse(cleanedContent);
+    } catch (parseError) {
+      console.error('JSON parse error:', parseError);
+      console.log('Cleaned content:', cleanedContent);
+      throw new Error('Invalid JSON response from AI');
+    }
+    
+    // Validate the response structure
+    if (!result.detectedFoods || !Array.isArray(result.detectedFoods)) {
+      throw new Error('Invalid response format from AI');
+    }
+
+    // Ensure all required fields are present
+    result.detectedFoods = result.detectedFoods.map((food: any) => ({
+      name: food.name || 'Unknown Food',
+      confidence: food.confidence || 0.5,
+      calories: food.calories || 0,
+      nutrients: {
+        protein: food.nutrients?.protein || 0,
+        carbs: food.nutrients?.carbs || 0,
+        fat: food.nutrients?.fat || 0,
+        fiber: food.nutrients?.fiber || 0,
+        vitamins: food.nutrients?.vitamins || []
+      }
+    }));
+
+    result.totalCalories = result.totalCalories || 0;
+    result.healthScore = result.healthScore || 5;
+    result.recommendations = result.recommendations || ['No specific recommendations available'];
+
+    console.log('Processed AI result:', JSON.stringify(result, null, 2));
+    return result;
+
+  } catch (error) {
+    console.error('Error analyzing food image:', error);
+    
+    // Return a fallback response instead of throwing
+    return {
+      detectedFoods: [
+        {
+          name: "Unidentified Food",
+          confidence: 0.1,
+          calories: 50,
+          nutrients: {
+            protein: 1,
+            carbs: 10,
+            fat: 0.5,
+            fiber: 2,
+            vitamins: ["Various nutrients"]
+          }
+        }
+      ],
+      totalCalories: 50,
+      healthScore: 5,
+      recommendations: [
+        "Unable to analyze image properly. Please try with a clearer image.",
+        "Ensure good lighting and the food is clearly visible."
+      ]
+    };
+  }
+}
+
+/**
+ * Generate personalized meal suggestions based on detected foods and user profile
+ */
+export async function generateMealSuggestions(
+  detectedFoods: string[],
+  userProfile?: any
+): Promise<MealSuggestion[]> {
+  try {
+    const foodList = detectedFoods.join(', ');
+    const healthContext = userProfile ? `
+User Profile Context:
+- Age: ${userProfile.age}
+- Health Goals: ${userProfile.healthGoals?.join(', ') || 'General wellness'}
+- Activity Level: ${userProfile.activityLevel || 'moderate'}
+- Medical Conditions: ${userProfile.medicalConditions?.join(', ') || 'None'}
+- Dietary Restrictions: ${userProfile.dietaryRestrictions?.join(', ') || 'None'}
+- Allergies: ${userProfile.allergies?.join(', ') || 'None'}
+` : '';
+
+    const prompt = `Based on these detected foods: ${foodList}
+${healthContext}
+
+Generate 3-5 personalized meal suggestions. Each meal should be nutritious, feasible, and aligned with the user's health profile.
+
+Return a JSON array with this exact structure:
+[
+  {
+    "name": "Meal Name",
+    "description": "Brief description of the meal",
+    "calories": 450,
+    "prepTime": 25,
+    "difficulty": "Easy",
+    "ingredients": ["ingredient 1", "ingredient 2"],
+    "instructions": ["step 1", "step 2"],
+    "healthBenefits": ["benefit 1", "benefit 2"],
+    "suitableFor": ["vegetarian", "low-carb"]
+  }
+]
+
+Guidelines:
+- Use the detected foods as primary ingredients
+- Suggest complementary ingredients for balanced nutrition
+- Consider user's health goals and restrictions
+- Difficulty: Easy/Medium/Hard
+- Include prep time in minutes
+- Provide clear health benefits
+- List dietary compatibility (vegetarian, vegan, keto, etc.)`;
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "system",
+          content: "You are a professional nutritionist and chef AI assistant. Provide practical, healthy meal suggestions based on available ingredients and user health profiles."
+        },
+        {
+          role: "user",
+          content: prompt
+        }
+      ],
+      max_tokens: 2000,
+      temperature: 0.3,
+    });
+
+    const content = response.choices[0]?.message?.content;
+    if (!content) {
+      throw new Error('No response from AI');
+    }
+
+    const suggestions = JSON.parse(content);
+    
+    if (!Array.isArray(suggestions)) {
+      throw new Error('Invalid response format from AI');
+    }
+
+    return suggestions;
+  } catch (error) {
+    console.error('Error generating meal suggestions:', error);
+    throw new Error('Failed to generate meal suggestions: ' + (error as Error).message);
   }
 }

@@ -13,13 +13,19 @@ import {
   type InsertSymptomEntry,
   type ChatMessage,
   type InsertChatMessage,
+  type GroceryList,
+  type InsertGroceryList,
+  type FoodDetection,
+  type InsertFoodDetection,
   users,
   healthProfiles,
   healthPlans,
   trackingEntries,
   mentalWellnessEntries,
   symptomEntries,
-  chatMessages
+  chatMessages,
+  groceryLists,
+  foodDetections
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { drizzle } from "drizzle-orm/neon-http";
@@ -69,6 +75,18 @@ export interface IStorage {
   // Chat messages methods
   getChatMessages(userId: string, limit?: number): Promise<ChatMessage[]>;
   createChatMessage(message: InsertChatMessage): Promise<ChatMessage>;
+  
+  // Grocery lists methods
+  getGroceryLists(userId: string, limit?: number): Promise<GroceryList[]>;
+  getGroceryList(id: string): Promise<GroceryList | undefined>;
+  createGroceryList(list: InsertGroceryList): Promise<GroceryList>;
+  updateGroceryList(id: string, updates: Partial<InsertGroceryList>): Promise<GroceryList | undefined>;
+  deleteGroceryList(id: string): Promise<boolean>;
+  
+  // Food detection methods
+  getFoodDetections(userId: string, limit?: number): Promise<FoodDetection[]>;
+  getFoodDetection(id: string): Promise<FoodDetection | undefined>;
+  createFoodDetection(detection: InsertFoodDetection): Promise<FoodDetection>;
 }
 
 export class MemStorage implements IStorage {
@@ -79,6 +97,8 @@ export class MemStorage implements IStorage {
   private mentalWellnessEntries: Map<string, MentalWellnessEntry>;
   private symptomEntries: Map<string, SymptomEntry>;
   private chatMessages: Map<string, ChatMessage>;
+  private groceryLists: Map<string, GroceryList>;
+  private foodDetections: Map<string, FoodDetection>;
 
   constructor() {
     this.users = new Map();
@@ -88,6 +108,8 @@ export class MemStorage implements IStorage {
     this.mentalWellnessEntries = new Map();
     this.symptomEntries = new Map();
     this.chatMessages = new Map();
+    this.groceryLists = new Map();
+    this.foodDetections = new Map();
   }
 
   // User methods
@@ -375,6 +397,76 @@ export class MemStorage implements IStorage {
     this.chatMessages.set(id, message);
     return message;
   }
+
+  // Grocery lists methods
+  async getGroceryLists(userId: string, limit = 20): Promise<GroceryList[]> {
+    return Array.from(this.groceryLists.values())
+      .filter((list) => list.userId === userId)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, limit);
+  }
+
+  async getGroceryList(id: string): Promise<GroceryList | undefined> {
+    return this.groceryLists.get(id);
+  }
+
+  async createGroceryList(insertList: InsertGroceryList): Promise<GroceryList> {
+    const id = randomUUID();
+    const list: GroceryList = {
+      id,
+      userId: insertList.userId,
+      name: insertList.name,
+      items: insertList.items,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    this.groceryLists.set(id, list);
+    return list;
+  }
+
+  async updateGroceryList(id: string, updates: Partial<InsertGroceryList>): Promise<GroceryList | undefined> {
+    const existing = this.groceryLists.get(id);
+    if (!existing) return undefined;
+    const updated: GroceryList = {
+      ...existing,
+      ...updates,
+      updatedAt: new Date()
+    };
+    this.groceryLists.set(id, updated);
+    return updated;
+  }
+
+  async deleteGroceryList(id: string): Promise<boolean> {
+    return this.groceryLists.delete(id);
+  }
+
+  // Food detection methods
+  async getFoodDetections(userId: string, limit = 10): Promise<FoodDetection[]> {
+    return Array.from(this.foodDetections.values())
+      .filter((detection) => detection.userId === userId)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, limit);
+  }
+
+  async getFoodDetection(id: string): Promise<FoodDetection | undefined> {
+    return this.foodDetections.get(id);
+  }
+
+  async createFoodDetection(insertDetection: InsertFoodDetection): Promise<FoodDetection> {
+    const id = randomUUID();
+    const detection: FoodDetection = {
+      id,
+      userId: insertDetection.userId,
+      imagePath: insertDetection.imagePath ?? null,
+      detectedFoods: insertDetection.detectedFoods,
+      totalCalories: insertDetection.totalCalories ?? null,
+      healthScore: insertDetection.healthScore ?? null,
+      recommendations: insertDetection.recommendations ?? null,
+      createdAt: new Date()
+    };
+    this.foodDetections.set(id, detection);
+    return detection;
+  }
 }
 
 // PostgreSQL Storage implementation using Drizzle ORM
@@ -585,6 +677,55 @@ export class PostgresStorage implements IStorage {
 
   async createChatMessage(insertMessage: InsertChatMessage): Promise<ChatMessage> {
     const result = await this.db.insert(chatMessages).values(insertMessage).returning();
+    return result[0];
+  }
+
+  // Grocery lists methods
+  async getGroceryLists(userId: string, limit = 20): Promise<GroceryList[]> {
+    return await this.db.select().from(groceryLists)
+      .where(eq(groceryLists.userId, userId))
+      .orderBy(desc(groceryLists.createdAt))
+      .limit(limit);
+  }
+
+  async getGroceryList(id: string): Promise<GroceryList | undefined> {
+    const result = await this.db.select().from(groceryLists).where(eq(groceryLists.id, id));
+    return result[0];
+  }
+
+  async createGroceryList(insertList: InsertGroceryList): Promise<GroceryList> {
+    const result = await this.db.insert(groceryLists).values(insertList).returning();
+    return result[0];
+  }
+
+  async updateGroceryList(id: string, updates: Partial<InsertGroceryList>): Promise<GroceryList | undefined> {
+    const result = await this.db.update(groceryLists)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(groceryLists.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async deleteGroceryList(id: string): Promise<boolean> {
+    const result = await this.db.delete(groceryLists).where(eq(groceryLists.id, id));
+    return result.rowCount > 0;
+  }
+
+  // Food detection methods
+  async getFoodDetections(userId: string, limit = 10): Promise<FoodDetection[]> {
+    return await this.db.select().from(foodDetections)
+      .where(eq(foodDetections.userId, userId))
+      .orderBy(desc(foodDetections.createdAt))
+      .limit(limit);
+  }
+
+  async getFoodDetection(id: string): Promise<FoodDetection | undefined> {
+    const result = await this.db.select().from(foodDetections).where(eq(foodDetections.id, id));
+    return result[0];
+  }
+
+  async createFoodDetection(insertDetection: InsertFoodDetection): Promise<FoodDetection> {
+    const result = await this.db.insert(foodDetections).values(insertDetection).returning();
     return result[0];
   }
 }

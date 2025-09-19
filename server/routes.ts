@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
+import multer from "multer";
 import { storage } from "./storage";
 import bcrypt from "bcryptjs";
 import { 
@@ -20,7 +21,7 @@ import {
   doctorSearchRequestSchema,
   type User
 } from "@shared/schema";
-import { analyzeSymptoms, generateHealthPlan, generateMentalWellnessResponse, findNearbyDoctors } from "./utils/openai";
+import { analyzeSymptoms, generateHealthPlan, generateMentalWellnessResponse, findNearbyDoctors, analyzeFood, generateMealSuggestions } from "./utils/openai";
 import { generateTokenPair, generateAccessToken, verifyToken, extractTokenFromHeader, type JWTPayload } from "./utils/jwt";
 
 // Extend Express Request type to include user
@@ -72,6 +73,30 @@ async function requireUser(req: any, res: any, next: any) {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  
+  // Configure multer for file uploads
+  const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: {
+      fileSize: 5 * 1024 * 1024, // 5MB limit
+    },
+    fileFilter: (req, file, cb) => {
+      if (file.mimetype.startsWith('image/')) {
+        cb(null, true);
+      } else {
+        cb(new Error('Only image files are allowed'));
+      }
+    },
+  });
+
+  // Multer error handler
+  app.use((error: any, req: any, res: any, next: any) => {
+    if (error instanceof multer.MulterError) {
+      console.log('Multer error:', error.message);
+      return res.status(400).json({ error: error.message });
+    }
+    next(error);
+  });
   
   // Authentication routes
   app.post("/api/auth/register", async (req, res) => {
@@ -1072,6 +1097,139 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Error searching for doctors:', error);
       res.status(500).json({ 
         error: "Failed to search for doctors", 
+        details: error.message 
+      });
+    }
+  });
+
+  // Simple test endpoint for file upload
+  app.post("/api/test-upload", upload.single('image'), (req, res) => {
+    console.log('Test upload endpoint hit');
+    console.log('File received:', req.file ? 'Yes' : 'No');
+    
+    if (!req.file) {
+      return res.status(400).json({ error: "No file received" });
+    }
+
+    res.json({
+      success: true,
+      file: {
+        originalname: req.file.originalname,
+        mimetype: req.file.mimetype,
+        size: req.file.size
+      }
+    });
+  });
+
+  // AI Food Detection endpoint
+  app.post("/api/ai/detect-food", upload.single('image'), requireUser, async (req, res) => {
+    console.log('Food detection endpoint hit');
+    console.log('File received:', req.file ? 'Yes' : 'No');
+    console.log('User authenticated:', req.user ? 'Yes' : 'No');
+    
+    try {
+      if (!req.user) {
+        console.log('No user found in request');
+        return res.status(401).json({ error: "User not authenticated" });
+      }
+
+      if (!req.file) {
+        console.log('No file found in request');
+        return res.status(400).json({ error: "No image file provided" });
+      }
+
+      console.log('File details:', {
+        originalname: req.file.originalname,
+        mimetype: req.file.mimetype,
+        size: req.file.size
+      });
+
+      const imageBuffer = req.file.buffer;
+
+      // Get user's health profile for personalized analysis
+      const healthProfile = await storage.getHealthProfile(req.user.id);
+      console.log('Health profile found:', healthProfile ? 'Yes' : 'No');
+
+      // Use real AI analysis
+      console.log('Starting AI food analysis...');
+      const analysisResult = await analyzeFood(imageBuffer, healthProfile);
+      console.log('AI analysis completed');
+
+      res.json(analysisResult);
+    } catch (error: any) {
+      console.error('Food detection error:', error);
+      res.status(500).json({ 
+        error: "Failed to analyze food image", 
+        details: error.message 
+      });
+    }
+  });
+
+  // AI Meal Suggestions endpoint
+  app.post("/api/ai/suggest-meals", requireUser, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: "User not authenticated" });
+      }
+
+      const { detectedFoods } = req.body;
+      
+      if (!detectedFoods || !Array.isArray(detectedFoods)) {
+        return res.status(400).json({ error: "Invalid detected foods data" });
+      }
+
+      // Get user's health profile for personalized suggestions
+      const healthProfile = await storage.getHealthProfile(req.user.id);
+
+      // Generate meal suggestions
+      const mealSuggestions = await generateMealSuggestions(detectedFoods, healthProfile);
+
+      res.json(mealSuggestions);
+    } catch (error: any) {
+      console.error('Meal suggestion error:', error);
+      res.status(500).json({ 
+        error: "Failed to generate meal suggestions", 
+        details: error.message 
+      });
+    }
+  });
+
+  // Grocery Lists endpoints
+  app.get("/api/grocery-lists/:userId", requireUser, async (req, res) => {
+    try {
+      // For now, return empty array since we haven't implemented storage yet
+      res.json([]);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get grocery lists" });
+    }
+  });
+
+  app.post("/api/grocery-lists", requireUser, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: "User not authenticated" });
+      }
+
+      const { name, items } = req.body;
+      
+      if (!name || !items) {
+        return res.status(400).json({ error: "Name and items are required" });
+      }
+
+      // For now, return a mock response since we haven't implemented storage yet
+      const mockGroceryList = {
+        id: 'mock-id',
+        name,
+        items,
+        userId: req.user.id,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      res.json(mockGroceryList);
+    } catch (error: any) {
+      res.status(500).json({ 
+        error: "Failed to create grocery list", 
         details: error.message 
       });
     }

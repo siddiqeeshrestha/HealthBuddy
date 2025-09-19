@@ -75,7 +75,7 @@ export default function MentalWellness() {
   };
 
   return (
-    <div className="container mx-auto p-6 max-w-4xl">
+    <div className="container mx-auto p-6 max-w-4xl h-screen flex flex-col">
       <div className="text-center mb-8">
         <div className="flex items-center justify-center mb-4">
           <Brain className="h-12 w-12 text-teal-600 mr-3" />
@@ -86,16 +86,16 @@ export default function MentalWellness() {
         </p>
       </div>
 
-      <Card className="h-[600px] flex flex-col">
-        <CardHeader className="border-b">
+      <Card className="flex-1 flex flex-col min-h-0">
+        <CardHeader className="border-b flex-shrink-0">
           <CardTitle className="flex items-center gap-2">
             <Heart className="h-5 w-5 text-teal-600" />
             Chat with HealthBuddy
           </CardTitle>
         </CardHeader>
         
-        <CardContent className="flex-1 p-0">
-          <ScrollArea className="h-full p-4" ref={scrollAreaRef}>
+        <CardContent className="flex-1 p-0 flex flex-col min-h-0">
+          <ScrollArea className="flex-1 p-4" ref={scrollAreaRef}>
             {isLoading ? (
               <div className="flex justify-center items-center h-full">
                 <div className="text-center">
@@ -201,7 +201,7 @@ export default function MentalWellness() {
           </ScrollArea>
           
           {/* Message input */}
-          <div className="p-4 border-t">
+          <div className="p-4 border-t flex-shrink-0">
             <form onSubmit={handleSendMessage} className="flex gap-2">
               <Input
                 value={message}

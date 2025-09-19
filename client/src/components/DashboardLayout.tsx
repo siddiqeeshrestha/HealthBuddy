@@ -14,7 +14,8 @@ import {
   X,
   LucideIcon,
   Settings,
-  AlertTriangle
+  AlertTriangle,
+  Camera
 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -52,6 +53,7 @@ const navigation: NavigationItem[] = [
   { name: 'Daily Tracking', href: '/tracking', icon: Activity },
   { name: 'Symptom Checker', href: '/symptoms', icon: Stethoscope },
   { name: 'Mental Wellness', href: '/wellness', icon: Brain },
+  { name: 'Smart Grocery', href: '/grocery', icon: Camera },
 ];
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
@@ -125,6 +127,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           <div className="flex-1 px-4 flex justify-between items-center">
             <div className="flex-1" />
             <div className="ml-4 flex items-center md:ml-6 space-x-4">
+              <ProfileDialog />
               <div className="flex items-center space-x-3">
                 <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
                   <User className="w-5 h-5 text-primary" />
@@ -196,12 +199,6 @@ function SidebarContent({ navigation, isActive }: {
           </Link>
         ))}
       </nav>
-      
-      {/* Profile Button at bottom */}
-      <div className="px-2 pb-4">
-        <Separator className="mb-4" />
-        <ProfileDialog />
-      </div>
     </>
   );
 }
@@ -221,11 +218,12 @@ function ProfileDialog() {
       <DialogTrigger asChild>
         <Button
           variant="ghost"
-          className="w-full justify-start text-muted-foreground hover:bg-muted hover:text-foreground"
+          size="sm"
+          className="text-muted-foreground hover:text-foreground"
           data-testid="button-profile"
         >
-          <Settings className="mr-3 h-6 w-6" />
-          Health Profile
+          <Settings className="h-4 w-4" />
+          <span className="hidden md:inline ml-2">Health Profile</span>
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-2xl max-h-[80vh]">

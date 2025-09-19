@@ -108,6 +108,28 @@ export const chatMessages = pgTable("chat_messages", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// Grocery lists table
+export const groceryLists = pgTable("grocery_lists", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  items: jsonb("items").notNull(), // Array of {name, quantity, category, purchased}
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Food detection results table
+export const foodDetections = pgTable("food_detections", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  imagePath: text("image_path"), // Path to uploaded image
+  detectedFoods: jsonb("detected_foods").notNull(), // Array of detected food items
+  totalCalories: integer("total_calories"),
+  healthScore: doublePrecision("health_score"),
+  recommendations: text("recommendations").array(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // Insert schemas with validation
 export const insertUserSchema = createInsertSchema(users).omit({
   createdAt: true,
@@ -179,6 +201,17 @@ export const insertSymptomEntrySchema = createInsertSchema(symptomEntries).omit(
 });
 
 export const insertChatMessageSchema = createInsertSchema(chatMessages).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertGroceryListSchema = createInsertSchema(groceryLists).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertFoodDetectionSchema = createInsertSchema(foodDetections).omit({
   id: true,
   createdAt: true,
 });
@@ -286,6 +319,12 @@ export type InsertSymptomEntry = z.infer<typeof insertSymptomEntrySchema>;
 
 export type ChatMessage = typeof chatMessages.$inferSelect;
 export type InsertChatMessage = z.infer<typeof insertChatMessageSchema>;
+
+export type GroceryList = typeof groceryLists.$inferSelect;
+export type InsertGroceryList = z.infer<typeof insertGroceryListSchema>;
+
+export type FoodDetection = typeof foodDetections.$inferSelect;
+export type InsertFoodDetection = z.infer<typeof insertFoodDetectionSchema>;
 
 // Specific tracking type definitions
 export type InsertCalorieLog = z.infer<typeof insertCalorieLogSchema>;
