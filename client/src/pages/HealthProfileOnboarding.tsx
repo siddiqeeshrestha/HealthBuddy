@@ -34,10 +34,10 @@ export default function HealthProfileOnboarding({ onComplete }: HealthProfileOnb
     defaultValues: {
       userId: currentUser?.id || "",
       gender: undefined,
-      age: undefined,
-      height: undefined,
-      weight: undefined,
-      goalWeight: undefined,
+      age: "" as any, // Initialize as empty string to prevent uncontrolled input warnings
+      height: "" as any,
+      weight: "" as any,
+      goalWeight: "" as any,
       activityLevel: undefined,
       healthGoals: [],
       medicalConditions: [],

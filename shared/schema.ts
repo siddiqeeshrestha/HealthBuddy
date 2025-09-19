@@ -111,7 +111,7 @@ export const onboardingHealthProfileSchema = createInsertSchema(healthProfiles).
   profileCompletedAt: true,
 }).extend({
   gender: z.enum(['male', 'female', 'other', 'prefer_not_to_say']),
-  age: z.number().int().min(13, "Must be at least 13 years old").max(120, "Invalid age"),
+  age: z.coerce.number().int().min(13, "Must be at least 13 years old").max(120, "Invalid age"),
   height: z.coerce.number().min(100, "Height must be at least 100cm").max(250, "Invalid height"),
   weight: z.coerce.number().min(20, "Weight must be at least 20kg").max(500, "Invalid weight"),
   goalWeight: z.coerce.number().min(20, "Goal weight must be at least 20kg").max(500, "Invalid goal weight").optional(),
@@ -129,7 +129,7 @@ export const insertHealthProfileSchema = createInsertSchema(healthProfiles).omit
   updatedAt: true,
 }).extend({
   gender: z.enum(['male', 'female', 'other', 'prefer_not_to_say']).optional(),
-  age: z.number().int().min(13).max(120).optional(),
+  age: z.coerce.number().int().min(13).max(120).optional(),
   height: z.coerce.number().min(100).max(250).optional(),
   weight: z.coerce.number().min(20).max(500).optional(),
   goalWeight: z.coerce.number().min(20).max(500).optional(),

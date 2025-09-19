@@ -147,34 +147,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // User routes
-  app.get("/api/users/:id", async (req, res) => {
+  app.get("/api/users/:id", requireUser, async (req, res) => {
     try {
+      if (!req.user) {
+        return res.status(401).json({ error: "User not authenticated" });
+      }
+      
+      // Enforce ownership - users can only access their own user data
+      if (req.params.id !== req.user.id) {
+        return res.status(403).json({ error: "Access denied - can only access your own user data" });
+      }
+      
       const user = await storage.getUser(req.params.id);
       if (!user) {
         return res.status(404).json({ error: "User not found" });
       }
-      res.json(user);
+      // Never expose password hash to client
+      const { passwordHash, ...safeUser } = user;
+      res.json(safeUser);
     } catch (error) {
       res.status(500).json({ error: "Failed to get user" });
     }
   });
 
-  app.post("/api/users", async (req, res) => {
-    try {
-      const validatedData = insertUserSchema.parse(req.body);
-      const user = await storage.createUser(validatedData);
-      res.status(201).json(user);
-    } catch (error: any) {
-      if (error.name === 'ZodError') {
-        return res.status(400).json({ error: "Invalid user data", details: error.errors });
-      }
-      res.status(500).json({ error: "Failed to create user" });
-    }
-  });
+  // REMOVED: Insecure user creation route - use /api/auth/register instead
+  // This route was removed due to critical security vulnerabilities:
+  // 1. Allowed unauthenticated arbitrary role assignment (including ADMIN)
+  // 2. Accepted raw passwordHash without proper hashing
+  // 3. Bypassed secure registration flow
+  // Use /api/auth/register for secure user creation
 
   // Health profile routes
   app.get("/api/health-profiles/:userId", requireUser, async (req, res) => {
     try {
+      if (!req.user) {
+        return res.status(401).json({ error: "User not authenticated" });
+      }
+      
+      // Enforce ownership - users can only access their own profiles
+      if (req.params.userId !== req.user.id) {
+        return res.status(403).json({ error: "Access denied - can only access your own profile" });
+      }
+      
       const profile = await storage.getHealthProfile(req.params.userId);
       if (!profile) {
         return res.status(404).json({ error: "Health profile not found" });
@@ -187,7 +201,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/health-profiles", requireUser, async (req, res) => {
     try {
-      const validatedData = insertHealthProfileSchema.parse(req.body);
+      if (!req.user) {
+        return res.status(401).json({ error: "User not authenticated" });
+      }
+      
+      // Enforce ownership - override any client-supplied userId
+      const profileData = {
+        ...req.body,
+        userId: req.user.id, // Always use authenticated user's ID
+      };
+      
+      const validatedData = insertHealthProfileSchema.parse(profileData);
       const profile = await storage.createHealthProfile(validatedData);
       res.status(201).json(profile);
     } catch (error: any) {
@@ -200,6 +224,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/health-profiles/:userId", requireUser, async (req, res) => {
     try {
+      if (!req.user) {
+        return res.status(401).json({ error: "User not authenticated" });
+      }
+      
+      // Enforce ownership - users can only update their own profiles
+      if (req.params.userId !== req.user.id) {
+        return res.status(403).json({ error: "Access denied - can only update your own profile" });
+      }
+      
       const validatedData = insertHealthProfileSchema.partial().parse(req.body);
       const profile = await storage.updateHealthProfile(req.params.userId, validatedData);
       if (!profile) {

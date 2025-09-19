@@ -363,7 +363,7 @@ export class PostgresStorage implements IStorage {
     try {
       console.log('PostgresStorage.getUser - Looking up user with id:', id);
       const result = await this.db.select().from(users).where(eq(users.id, id));
-      console.log('PostgresStorage.getUser - Query result:', result);
+      console.log('PostgresStorage.getUser - Query result: Found', result.length, 'user(s)'); // Sanitized logging - no sensitive data
       return result[0];
     } catch (error) {
       console.error('PostgresStorage.getUser - Error:', error);
