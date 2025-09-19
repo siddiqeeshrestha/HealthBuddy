@@ -1,0 +1,57 @@
+Let's start building the HealthBuddy project on Replit. The first step is to create a new Next.js application and set up the fundamental structure and styling. The design should be modern and minimal, inspired by platforms like ChatGPT or Gemini, featuring a clean layout and a simple color scheme without gradients.
+
+1. Project Initialization & Structure:
+
+Create a new Next.js project in Replit.
+
+Organize the project with the following directory structure:
+
+app/ for application routes.
+
+components/ for reusable UI elements.
+
+lib/ for utility functions, including Firebase configuration.
+
+public/ for static assets.
+
+styles/ for global CSS.
+
+2. Styling with Tailwind CSS:
+
+Install and configure Tailwind CSS.
+
+Define a minimal color palette in tailwind.config.js (e.g., neutral grays with a single accent color).
+
+Set up globals.css to apply base Tailwind styles.
+
+3. Landing Page (app/page.tsx):
+
+Design a simple yet elegant landing page with:
+
+Hero Section: A catchy headline like "Your Personal AI Health Companion," a brief description, and "Get Started" and "Login" buttons.
+
+Features Section: A concise overview of key features (Personalized Plans, Daily Tracking, AI Mental Wellness, Symptom Checker) with icons.
+
+Call to Action (CTA): A final encouragement for users to sign up.
+
+4. Authentication with Firebase:
+
+Set up a new project in the Firebase console and enable Email/Password authentication.
+
+Securely store your Firebase configuration keys in a .env.local file.
+
+In lib/firebase.ts, initialize the Firebase app.
+
+Create authentication pages within an (auth) route group in the app directory:
+
+login/page.tsx: A login form with email and password fields.
+
+signup/page.tsx: A signup form for name, email, and password.
+
+Implement the signup and login logic using Firebase's createUserWithEmailAndPassword and signInWithEmailAndPassword functions. Upon success, redirect users to a /dashboard route.
+
+Manage user sessions globally using a React Context provider and Firebase's onAuthStateChanged listener.
+
+5. Root Layout (app/layout.tsx):
+
+Create a root layout that incorporates a modern font (e.g., Inter from Google Fonts) and applies the global styles to ensure a consistent look and feel across the application."
