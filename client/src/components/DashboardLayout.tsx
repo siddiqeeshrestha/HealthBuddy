@@ -36,6 +36,8 @@ import { insertHealthProfileSchema } from '@shared/schema';
 import { apiRequest } from '@/lib/queryClient';
 import { useMutation } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
+import { useTranslation } from 'react-i18next';
+import LanguageSwitcher from './LanguageSwitcher';
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -43,23 +45,25 @@ interface DashboardLayoutProps {
 
 interface NavigationItem {
   name: string;
+  translationKey: string;
   href: string;
   icon: LucideIcon;
 }
-
-const navigation: NavigationItem[] = [
-  { name: 'Dashboard', href: '/', icon: Home },
-  { name: 'Personalized Plans', href: '/plans', icon: Target },
-  { name: 'Daily Tracking', href: '/tracking', icon: Activity },
-  { name: 'Symptom Checker', href: '/symptoms', icon: Stethoscope },
-  { name: 'Mental Wellness', href: '/wellness', icon: Brain },
-  { name: 'Smart Grocery', href: '/grocery', icon: Camera },
-];
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const { currentUser, logout } = useAuth();
   const [location, setLocation] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { t } = useTranslation();
+
+  const navigation: NavigationItem[] = [
+    { name: 'Dashboard', translationKey: 'navigation.dashboard', href: '/', icon: Home },
+    { name: 'Personalized Plans', translationKey: 'navigation.personalizedPlans', href: '/plans', icon: Target },
+    { name: 'Daily Tracking', translationKey: 'navigation.dailyTracking', href: '/tracking', icon: Activity },
+    { name: 'Symptom Checker', translationKey: 'navigation.symptomChecker', href: '/symptoms', icon: Stethoscope },
+    { name: 'Mental Wellness', translationKey: 'navigation.mentalWellness', href: '/wellness', icon: Brain },
+    { name: 'Smart Grocery', translationKey: 'navigation.smartGrocery', href: '/grocery', icon: Camera },
+  ];
 
   const handleLogout = async () => {
     await logout();
@@ -127,6 +131,15 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           <div className="flex-1 px-4 flex justify-between items-center">
             <div className="flex-1" />
             <div className="ml-4 flex items-center md:ml-6 space-x-4">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => (document.querySelector('[data-testid="button-health-profile"]') as HTMLElement)?.click()}
+                className="text-sm"
+              >
+                <Settings className="w-4 h-4 mr-2" />
+                {t('common.healthProfile')}
+              </Button>
               <ProfileDialog />
               <div className="flex items-center space-x-3">
                 <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
@@ -137,7 +150,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                     className="text-sm font-medium text-foreground"
                     data-testid="text-username"
                   >
-                    {currentUser?.displayName || 'User'}
+                    {currentUser?.displayName || t('common.user')}
                   </p>
                   <p 
                     className="text-xs text-muted-foreground"
@@ -172,11 +185,13 @@ function SidebarContent({ navigation, isActive }: {
   navigation: NavigationItem[];
   isActive: (href: string) => boolean;
 }) {
+  const { t } = useTranslation();
+  
   return (
     <>
       <div className="flex items-center flex-shrink-0 px-4">
         <CheckCircle className="h-8 w-8 text-primary" />
-        <span className="ml-2 text-xl font-semibold text-foreground">HealthBuddy</span>
+        <span className="ml-2 text-xl font-semibold text-foreground">{t('common.healthbuddy')}</span>
       </div>
       <nav className="mt-8 flex-1 px-2 space-y-1">
         {navigation.map((item) => (
@@ -194,11 +209,17 @@ function SidebarContent({ navigation, isActive }: {
                   isActive(item.href) ? 'text-primary-foreground' : 'text-muted-foreground group-hover:text-foreground'
                 }`}
               />
-              {item.name}
+              {t(item.translationKey)}
             </div>
           </Link>
         ))}
       </nav>
+      
+      {/* Language Switcher at bottom */}
+      <div className="pb-4">
+        <Separator className="mb-4" />
+        <LanguageSwitcher variant="sidebar" />
+      </div>
     </>
   );
 }
@@ -207,6 +228,7 @@ function ProfileDialog() {
   const [open, setOpen] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const { currentUser } = useAuth();
+  const { t } = useTranslation();
 
   const { data: profile, isLoading } = useQuery({
     queryKey: ['/api/health-profiles', currentUser?.id],
@@ -220,17 +242,17 @@ function ProfileDialog() {
           variant="ghost"
           size="sm"
           className="text-muted-foreground hover:text-foreground"
-          data-testid="button-profile"
+          data-testid="button-health-profile"
         >
           <Settings className="h-4 w-4" />
-          <span className="hidden md:inline ml-2">Health Profile</span>
+          <span className="hidden md:inline ml-2">{t('common.healthProfile')}</span>
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-2xl max-h-[80vh]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <User className="h-5 w-5" />
-            Health Profile
+            {t('common.healthProfile')}
           </DialogTitle>
           <DialogDescription>
             View and manage your health profile information.

@@ -1,0 +1,94 @@
+{
+  "common": {
+    "healthbuddy": "HealthBuddy",
+    "login": "Login",
+    "signup": "Sign Up",
+    "getStarted": "Get Started",
+    "dashboard": "Dashboard",
+    "logout": "Logout",
+    "user": "User",
+    "healthProfile": "Health Profile",
+    "language": "Language",
+    "english": "English",
+    "bengali": "Bengali"
+  },
+  "navigation": {
+    "dashboard": "Dashboard",
+    "personalizedPlans": "Personalized Plans",
+    "dailyTracking": "Daily Tracking",
+    "symptomChecker": "Symptom Checker",
+    "mentalWellness": "Mental Wellness",
+    "smartGrocery": "Smart Grocery"
+  },
+  "hero": {
+    "title": "Your Personal Health Companion",
+    "subtitle": "Track your health, get AI-powered insights, and achieve your wellness goals with personalized care.",
+    "cta": "Start Your Health Journey",
+    "loginAlternative": "I Already Have an Account"
+  },
+  "features": {
+    "title": "Everything You Need for Better Health",
+    "subtitle": "Comprehensive health tracking and AI-powered insights",
+    "smartTracking": {
+      "title": "Smart Health Tracking",
+      "description": "Monitor calories, exercise, weight, sleep, and mental wellness with intelligent insights."
+    },
+    "aiInsights": {
+      "title": "AI-Powered Health Insights",
+      "description": "Get personalized recommendations and symptom analysis powered by advanced AI."
+    },
+    "personalizedPlans": {
+      "title": "Personalized Health Plans",
+      "description": "Custom fitness and nutrition plans tailored to your goals and preferences."
+    },
+    "mentalWellness": {
+      "title": "Mental Wellness Support",
+      "description": "24/7 AI companion for mental health support and mindfulness guidance."
+    },
+    "symptomChecker": {
+      "title": "Smart Symptom Checker",
+      "description": "AI-powered symptom analysis with doctor recommendations and health insights."
+    },
+    "smartGrocery": {
+      "title": "Smart Grocery Assistant",
+      "description": "AI-powered nutrition analysis and healthy food recommendations."
+    }
+  },
+  "cta": {
+    "title": "Ready to Transform Your Health?",
+    "subtitle": "Join thousands of users who are taking control of their wellness journey.",
+    "button": "Get Started Today"
+  },
+  "footer": {
+    "tagline": "Your trusted health companion",
+    "links": {
+      "about": "About",
+      "privacy": "Privacy Policy",
+      "terms": "Terms of Service",
+      "contact": "Contact"
+    },
+    "copyright": "© 2025 HealthBuddy. All rights reserved."
+  },
+  "forms": {
+    "email": "Email",
+    "password": "Password",
+    "confirmPassword": "Confirm Password",
+    "fullName": "Full Name",
+    "submit": "Submit",
+    "cancel": "Cancel",
+    "save": "Save",
+    "edit": "Edit",
+    "delete": "Delete"
+  },
+  "dashboard": {
+    "welcome": "Welcome back",
+    "quickStats": "Quick Stats",
+    "recentActivity": "Recent Activity",
+    "todaysGoals": "Today's Goals",
+    "healthScore": "Health Score",
+    "caloriesConsumed": "Calories Consumed",
+    "exerciseMinutes": "Exercise Minutes",
+    "waterIntake": "Water Intake",
+    "sleepHours": "Sleep Hours"
+  }
+}
