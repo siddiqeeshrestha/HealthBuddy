@@ -116,6 +116,51 @@ export const insertSymptomEntrySchema = createInsertSchema(symptomEntries).omit(
   createdAt: true,
 });
 
+// Specific schemas for different tracking types
+export const insertCalorieLogSchema = insertTrackingEntrySchema.extend({
+  type: z.literal('nutrition'),
+  value: z.coerce.number().positive('Calories must be positive'),
+  unit: z.literal('calories'),
+  metadata: z.object({
+    foodItem: z.string().optional(),
+    mealType: z.enum(['breakfast', 'lunch', 'dinner', 'snack']).optional(),
+  }).optional(),
+});
+
+export const insertExerciseLogSchema = insertTrackingEntrySchema.extend({
+  type: z.literal('exercise'),
+  value: z.coerce.number().positive('Duration must be positive').optional(),
+  unit: z.enum(['minutes', 'hours']).optional(),
+  metadata: z.object({
+    exerciseType: z.string(),
+    intensity: z.enum(['low', 'moderate', 'high']).optional(),
+    caloriesBurned: z.number().optional(),
+  }),
+});
+
+export const insertWeightLogSchema = insertTrackingEntrySchema.extend({
+  type: z.literal('weight'),
+  value: z.coerce.number().positive('Weight must be positive'),
+  unit: z.enum(['kg', 'lbs']),
+});
+
+export const insertWaterLogSchema = insertTrackingEntrySchema.extend({
+  type: z.literal('water'),
+  value: z.coerce.number().positive('Water intake must be positive'),
+  unit: z.enum(['ml', 'liters', 'cups']),
+});
+
+export const insertSleepLogSchema = insertTrackingEntrySchema.extend({
+  type: z.literal('sleep'),
+  value: z.coerce.number().min(0).max(24, 'Sleep duration cannot exceed 24 hours'),
+  unit: z.literal('hours'),
+  metadata: z.object({
+    bedtime: z.string().optional(),
+    wakeupTime: z.string().optional(),
+    quality: z.number().min(1).max(10).optional(),
+  }).optional(),
+});
+
 // Type definitions
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -134,3 +179,10 @@ export type InsertMentalWellnessEntry = z.infer<typeof insertMentalWellnessEntry
 
 export type SymptomEntry = typeof symptomEntries.$inferSelect;
 export type InsertSymptomEntry = z.infer<typeof insertSymptomEntrySchema>;
+
+// Specific tracking type definitions
+export type InsertCalorieLog = z.infer<typeof insertCalorieLogSchema>;
+export type InsertExerciseLog = z.infer<typeof insertExerciseLogSchema>;
+export type InsertWeightLog = z.infer<typeof insertWeightLogSchema>;
+export type InsertWaterLog = z.infer<typeof insertWaterLogSchema>;
+export type InsertSleepLog = z.infer<typeof insertSleepLogSchema>;
