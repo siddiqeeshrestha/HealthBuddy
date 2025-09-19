@@ -7,6 +7,7 @@ import {
   Target, 
   Activity, 
   Brain, 
+  Stethoscope,
   LogOut, 
   User,
   Menu,
@@ -30,6 +31,7 @@ const navigation: NavigationItem[] = [
   { name: 'Dashboard', href: '/', icon: Home },
   { name: 'Personalized Plans', href: '/plans', icon: Target },
   { name: 'Daily Tracking', href: '/tracking', icon: Activity },
+  { name: 'Symptom Checker', href: '/symptoms', icon: Stethoscope },
   { name: 'Mental Wellness', href: '/wellness', icon: Brain },
 ];
 

@@ -3,12 +3,16 @@ import { pgTable, text, varchar, integer, decimal, doublePrecision, timestamp, b
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+// User roles enum
+export const userRoleEnum = z.enum(['END_USER', 'HEALTHCARE_PROFESSIONAL', 'ADMIN']);
+
 // Users table for custom authentication
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   displayName: text("display_name"),
+  role: text("role").notNull().default('END_USER'), // END_USER, HEALTHCARE_PROFESSIONAL, ADMIN
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -77,13 +81,16 @@ export const symptomEntries = pgTable("symptom_entries", {
   severity: integer("severity"), // 1-10 scale
   duration: text("duration"), // hours, days, weeks
   additionalInfo: text("additional_info"),
-  recommendations: text("recommendations"),
+  recommendations: text("recommendations"), // Keep for backward compatibility
+  analysis: jsonb("analysis"), // Structured AI analysis result
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 // Insert schemas with validation
 export const insertUserSchema = createInsertSchema(users).omit({
   createdAt: true,
+}).extend({
+  role: userRoleEnum.optional(),
 });
 
 export const insertHealthProfileSchema = createInsertSchema(healthProfiles).omit({
@@ -114,6 +121,23 @@ export const insertMentalWellnessEntrySchema = createInsertSchema(mentalWellness
 export const insertSymptomEntrySchema = createInsertSchema(symptomEntries).omit({
   id: true,
   createdAt: true,
+});
+
+// Specific schema for symptom analysis request
+export const symptomAnalysisRequestSchema = z.object({
+  symptoms: z.array(z.string()).min(1, "At least one symptom is required"),
+  severity: z.number().int().min(1).max(10),
+  duration: z.enum([
+    "less than 1 hour",
+    "1-6 hours", 
+    "6-24 hours",
+    "1-3 days",
+    "3-7 days", 
+    "1-2 weeks",
+    "2-4 weeks",
+    "more than 1 month"
+  ]),
+  additionalInfo: z.string().optional()
 });
 
 // Specific schemas for different tracking types

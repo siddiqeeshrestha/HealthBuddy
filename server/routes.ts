@@ -9,6 +9,7 @@ import {
   insertTrackingEntrySchema,
   insertMentalWellnessEntrySchema,
   insertSymptomEntrySchema,
+  symptomAnalysisRequestSchema,
   insertCalorieLogSchema,
   insertExerciseLogSchema,
   insertWeightLogSchema,
@@ -16,6 +17,7 @@ import {
   insertSleepLogSchema,
   type User
 } from "@shared/schema";
+import { analyzeSymptoms, generateHealthPlan, generateMentalWellnessResponse } from "./utils/openai";
 
 // Extend Express Request type to include user
 declare global {
@@ -214,6 +216,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Tracking routes
   app.get("/api/tracking/today", requireUser, async (req, res) => {
     try {
+      if (!req.user) {
+        return res.status(401).json({ error: "User not authenticated" });
+      }
+      
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const tomorrow = new Date(today);
@@ -228,6 +234,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/tracking/calories", requireUser, async (req, res) => {
     try {
+      if (!req.user) {
+        return res.status(401).json({ error: "User not authenticated" });
+      }
+      
       const requestData = {
         ...req.body,
         userId: req.user.id,
@@ -253,6 +263,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/tracking/exercise", requireUser, async (req, res) => {
     try {
+      if (!req.user) {
+        return res.status(401).json({ error: "User not authenticated" });
+      }
+      
       const requestData = {
         ...req.body,
         userId: req.user.id,
@@ -280,6 +294,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/tracking/weight", requireUser, async (req, res) => {
     try {
+      if (!req.user) {
+        return res.status(401).json({ error: "User not authenticated" });
+      }
+      
       const requestData = {
         ...req.body,
         userId: req.user.id,
@@ -300,6 +318,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/tracking/water", requireUser, async (req, res) => {
     try {
+      if (!req.user) {
+        return res.status(401).json({ error: "User not authenticated" });
+      }
+      
       const requestData = {
         ...req.body,
         userId: req.user.id,
@@ -320,6 +342,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/tracking/sleep", requireUser, async (req, res) => {
     try {
+      if (!req.user) {
+        return res.status(401).json({ error: "User not authenticated" });
+      }
+      
       const requestData = {
         ...req.body,
         userId: req.user.id,
@@ -346,6 +372,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/mental-wellness/recent", requireUser, async (req, res) => {
     try {
+      if (!req.user) {
+        return res.status(401).json({ error: "User not authenticated" });
+      }
+      
       const entries = await storage.getMentalWellnessEntries(req.user.id, 10);
       res.json(entries);
     } catch (error) {
@@ -355,6 +385,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/mental-wellness", requireUser, async (req, res) => {
     try {
+      if (!req.user) {
+        return res.status(401).json({ error: "User not authenticated" });
+      }
+      
       const requestData = {
         ...req.body,
         userId: req.user.id,
@@ -395,8 +429,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/health-plans", requireUser, async (req, res) => {
     try {
+      if (!req.user) {
+        return res.status(401).json({ error: "User not authenticated" });
+      }
+      
       console.log('Health plan creation request:', req.body);
-      console.log('Authenticated user:', req.user?.id);
+      console.log('Authenticated user:', req.user.id);
       
       // Add userId from authenticated user
       const requestData = {
@@ -654,6 +692,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ error: "Failed to delete symptom entry" });
+    }
+  });
+
+  // AI-powered symptom analysis route
+  app.post("/api/symptoms/analyze", requireUser, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: "User not authenticated" });
+      }
+
+      // Validate request data using Zod schema
+      const validatedRequest = symptomAnalysisRequestSchema.parse(req.body);
+      const { symptoms, severity, duration, additionalInfo } = validatedRequest;
+
+      // Get user's health profile for context
+      const healthProfile = await storage.getHealthProfile(req.user.id);
+      
+      // Analyze symptoms using AI
+      const analysis = await analyzeSymptoms(
+        symptoms,
+        severity,
+        duration,
+        additionalInfo,
+        healthProfile?.age || undefined,
+        // Note: we don't have gender in health profile yet, could be added later
+        undefined
+      );
+
+      // Save the symptom entry with structured AI analysis
+      const symptomEntryData = {
+        userId: req.user.id,
+        symptoms,
+        severity,
+        duration,
+        additionalInfo: additionalInfo || null,
+        recommendations: JSON.stringify(analysis), // Keep for backward compatibility
+        analysis: analysis // Store structured analysis
+      };
+
+      const validatedData = insertSymptomEntrySchema.parse(symptomEntryData);
+      const entry = await storage.createSymptomEntry(validatedData);
+
+      res.status(201).json({
+        entry,
+        analysis
+      });
+    } catch (error: any) {
+      console.error('AI symptom analysis error:', error);
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ 
+          error: "Invalid request data", 
+          details: error.errors.map((e: any) => `${e.path.join('.')}: ${e.message}`)
+        });
+      }
+      res.status(500).json({ error: "Failed to analyze symptoms", details: error.message });
     }
   });
 
