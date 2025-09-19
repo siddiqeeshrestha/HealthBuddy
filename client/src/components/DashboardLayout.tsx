@@ -27,10 +27,10 @@ interface NavigationItem {
 }
 
 const navigation: NavigationItem[] = [
-  { name: 'Dashboard', href: '/dashboard', icon: Home },
-  { name: 'Personalized Plans', href: '/dashboard/plans', icon: Target },
-  { name: 'Daily Tracking', href: '/dashboard/tracking', icon: Activity },
-  { name: 'Mental Wellness', href: '/dashboard/wellness', icon: Brain },
+  { name: 'Dashboard', href: '/', icon: Home },
+  { name: 'Personalized Plans', href: '/plans', icon: Target },
+  { name: 'Daily Tracking', href: '/tracking', icon: Activity },
+  { name: 'Mental Wellness', href: '/wellness', icon: Brain },
 ];
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
@@ -44,10 +44,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   };
 
   const isActive = (href: string) => {
-    if (href === '/dashboard') {
+    if (href === '/') {
       return location === '/dashboard' || location === '/dashboard/';
     }
-    return location.startsWith(href);
+    return location.startsWith(`/dashboard${href}`);
   };
 
   return (
